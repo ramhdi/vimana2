@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Dashboard</title>
+  <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
+  <style>
+    body {
+      background-color: #f8f9fa;
+    }
+
+    .container {
+      margin-top: 2rem;
+    }
+  </style>
+</head>
+
+<body>
+  <div class="container">
+    <div class="d-flex justify-content-between align-items-center">
+      <h2>Welcome to Your Dashboard</h2>
+      <button class="btn btn-danger" id="logoutButton">Logout</button>
+    </div>
+    <p class="text-muted">This is your personalized landing page.</p>
+    <!-- Additional user content can go here -->
+  </div>
+
+  <script>
+    document.getElementById("logoutButton").addEventListener("click", async function () {
+      try {
+        const response = await fetch("/api/protected/logout", {
+          method: "POST",
+          credentials: "same-origin"
+        });
+
+        if (response.ok) {
+          window.location.href = "/";
+        } else {
+          alert("Failed to log out. Please try again.");
+        }
+      } catch (error) {
+        alert("An error occurred. Please try again.");
+      }
+    });
+  </script>
+</body>
+
+</html>

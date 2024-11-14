@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Login</title>
+  <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
+  <style>
+    body {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      height: 100vh;
+      background-color: #f8f9fa;
+    }
+
+    .login-form {
+      width: 100%;
+      max-width: 400px;
+      padding: 1.5rem;
+      border-radius: 0.5rem;
+      background-color: white;
+      box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+    }
+  </style>
+</head>
+
+<body>
+  <div class="login-form">
+    <h3 class="text-center">Login</h3>
+    <form id="loginForm">
+      <div class="form-group">
+        <label for="username">Username</label>
+        <input type="text" class="form-control" id="username" required>
+      </div>
+      <div class="form-group">
+        <label for="password">Password</label>
+        <input type="password" class="form-control" id="password" required>
+      </div>
+      <button type="submit" class="btn btn-primary btn-block">Login</button>
+    </form>
+    <div id="message" class="text-danger text-center mt-3"></div>
+  </div>
+
+  <script>
+    document.getElementById("loginForm").addEventListener("submit", async function (event) {
+      event.preventDefault();
+      const username = document.getElementById("username").value;
+      const password = document.getElementById("password").value;
+
+      try {
+        const response = await fetch("/api/public/login", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({ username, password })
+        });
+
+        if (response.ok) {
+          window.location.href = "/home";
+        } else {
+          document.getElementById("message").innerText = "Invalid username or password.";
+        }
+      } catch (error) {
+        document.getElementById("message").innerText = "An error occurred. Please try again.";
+      }
+    });
+  </script>
+</body>
+
+</html>
