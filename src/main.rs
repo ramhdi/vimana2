@@ -7,6 +7,7 @@
 mod handlers;
 mod middleware;
 mod models;
+mod queries;
 mod renders;
 mod requests;
 mod schema;
