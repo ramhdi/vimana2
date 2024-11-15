@@ -8,7 +8,7 @@ WORKDIR /app
 COPY Cargo.toml ./
 COPY Cargo.lock ./
 COPY src ./src
-COPY template ./template
+COPY templates ./templates
 COPY static ./static
 
 # Install dependencies and build the app in release mode
@@ -27,7 +27,7 @@ WORKDIR /app
 # Copy the compiled binary and shared libraries from the builder stage
 COPY --from=builder /app/target/release/vimana2 /app/vimana2
 # COPY --from=builder /app/libs /app/libs
-COPY --from=builder /app/template /app/template
+COPY --from=builder /app/templates /app/templates
 COPY --from=builder /app/static /app/static
 
 # Set the environment variable to include the shared libraries
