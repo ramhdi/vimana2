@@ -42,46 +42,63 @@ pub async fn health_check(pool: web::Data<DbPool>) -> HttpResponse {
 /// - `401 Unauthorized` if credentials are invalid.
 pub async fn login(
     pool: web::Data<DbPool>,
+    base_url: web::Data<String>,
     req: web::Json<LoginRequest>,
 ) -> Result<HttpResponse, Error> {
-    let mut conn = pool.get().unwrap();
+    let mut conn = pool.get().map_err(|_| {
+        actix_web::error::ErrorInternalServerError("Failed to connect to the database")
+    })?;
+
     let user = users::table
         .filter(users::username.eq(&req.username))
         .first::<User>(&mut conn);
 
-    if let Ok(user) = user {
-        if verify(&req.password, &user.hashed_password).unwrap() {
-            let session_token: String = rand::thread_rng()
-                .sample_iter(&Alphanumeric)
-                .take(30)
-                .map(char::from)
-                .collect();
+    let base_url = if base_url.is_empty() {
+        "/"
+    } else {
+        base_url.as_str()
+    };
 
-            let expires_at = Utc::now() + Duration::days(1);
-            diesel::insert_into(sessions::table)
-                .values(&Session {
-                    id: Uuid::new_v4(),
-                    user_id: Some(user.id),
-                    session_token: session_token.clone(),
-                    expires_at: expires_at.naive_utc(),
-                    created_at: Some(Utc::now().naive_utc()),
-                })
-                .execute(&mut conn)
-                .unwrap();
+    match user {
+        Ok(user) => match verify(&req.password, &user.hashed_password) {
+            Ok(is_valid) if is_valid => {
+                let session_token: String = rand::thread_rng()
+                    .sample_iter(&Alphanumeric)
+                    .take(30)
+                    .map(char::from)
+                    .collect();
 
-            return Ok(HttpResponse::Ok()
-                .cookie(
-                    actix_web::cookie::Cookie::build("session_token", session_token)
-                        .path("/")
-                        .http_only(true)
-                        .max_age(actix_web::cookie::time::Duration::days(1))
-                        .finish(),
-                )
-                .json("Logged in successfully"));
-        }
+                let expires_at = Utc::now() + Duration::days(1);
+                diesel::insert_into(sessions::table)
+                    .values(&Session {
+                        id: Uuid::new_v4(),
+                        user_id: Some(user.id),
+                        session_token: session_token.clone(),
+                        expires_at: expires_at.naive_utc(),
+                        created_at: Some(Utc::now().naive_utc()),
+                    })
+                    .execute(&mut conn)
+                    .map_err(|_| {
+                        actix_web::error::ErrorInternalServerError(
+                            "Failed to execute query to the database",
+                        )
+                    })?;
+
+                Ok(HttpResponse::Ok()
+                    .cookie(
+                        actix_web::cookie::Cookie::build("session_token", session_token)
+                            .path(base_url)
+                            .http_only(true)
+                            .max_age(actix_web::cookie::time::Duration::days(1))
+                            .finish(),
+                    )
+                    .json("Logged in successfully"))
+            }
+            Ok(_) => Ok(HttpResponse::Unauthorized().body("Invalid username or password")),
+            Err(_) => Ok(HttpResponse::InternalServerError().body("Password verification error")),
+        },
+        Err(_) => Ok(HttpResponse::Unauthorized().body("Invalid username or password")),
     }
-
-    Ok(HttpResponse::Unauthorized().body("Invalid username or password"))
 }
 
 /// Handles user logout by deleting the session token from the database and clearing the session cookie.
@@ -95,15 +112,27 @@ pub async fn login(
 /// - `200 OK` on successful logout.
 /// - `404 NotFound` if the session is not found.
 /// - `401 Unauthorized` if the user is not authenticated.
-pub async fn logout(pool: web::Data<DbPool>, req: HttpRequest) -> Result<HttpResponse, Error> {
+pub async fn logout(
+    pool: web::Data<DbPool>,
+    base_url: web::Data<String>,
+    req: HttpRequest,
+) -> Result<HttpResponse, Error> {
     let authenticated_user_id = req.authenticated_user_id();
     let session_token = req
         .cookie("session_token")
         .map(|cookie| cookie.value().to_string());
 
+    let base_url = if base_url.is_empty() {
+        "/"
+    } else {
+        base_url.as_str()
+    };
+
     match (authenticated_user_id, session_token) {
         (Some(user_id), Some(token)) => {
-            let mut conn = pool.get().unwrap();
+            let mut conn = pool.get().map_err(|_| {
+                actix_web::error::ErrorInternalServerError("Failed to connect to the database")
+            })?;
 
             let num_deleted = diesel::delete(
                 sessions::table
@@ -120,7 +149,7 @@ pub async fn logout(pool: web::Data<DbPool>, req: HttpRequest) -> Result<HttpRes
             Ok(HttpResponse::Ok()
                 .cookie(
                     actix_web::cookie::Cookie::build("session_token", "")
-                        .path("/")
+                        .path(base_url)
                         .http_only(true)
                         .max_age(actix_web::cookie::time::Duration::seconds(0))
                         .finish(),
@@ -151,7 +180,9 @@ pub async fn create_user(
 
     match authenticated_user_id {
         Some(uid) if uid == *SUPERUSER_ID => {
-            let hashed_password = hash(&new_user.password, DEFAULT_COST).unwrap();
+            let hashed_password = hash(&new_user.password, DEFAULT_COST).map_err(|_| {
+                actix_web::error::ErrorInternalServerError("Failed to hash password")
+            })?;
 
             let new_user = NewUser {
                 id: Uuid::new_v4(),
@@ -162,15 +193,20 @@ pub async fn create_user(
                 updated_at: None,
             };
 
-            let mut conn = pool.get().unwrap();
-            let inserted_user = diesel::insert_into(users::table)
-                .values(&new_user)
-                .get_result::<User>(&mut conn);
+            let mut conn = pool.get().map_err(|_| {
+                actix_web::error::ErrorInternalServerError("Failed to connect to the database")
+            })?;
 
-            match inserted_user {
-                Ok(user) => Ok(HttpResponse::Ok().json(user)),
-                Err(_) => Ok(HttpResponse::InternalServerError().json("Error creating user")),
-            }
+            diesel::insert_into(users::table)
+                .values(&new_user)
+                .get_result::<User>(&mut conn)
+                .map_err(|_| {
+                    actix_web::error::ErrorInternalServerError(
+                        "Failed to execute query to the database",
+                    )
+                })?;
+
+            Ok(HttpResponse::Ok().finish())
         }
         Some(uid) => Ok(HttpResponse::Forbidden().json(format!(
             "Only superuser can create new users. Your UID: {}",
