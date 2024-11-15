@@ -91,8 +91,9 @@ async fn main() -> std::io::Result<()> {
                             .route("/users", web::post().to(handlers::create_user)),
                     ),
             )
+            .service(fs::Files::new("/static", "./static").show_files_listing())
     })
-    .bind(("127.0.0.1", 8081))?
+    .bind(("0.0.0.0", 8081))?
     .run()
     .await
 }
