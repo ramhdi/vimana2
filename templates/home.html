@@ -30,13 +30,13 @@
   <script>
     document.getElementById("logoutButton").addEventListener("click", async function () {
       try {
-        const response = await fetch("/api/protected/logout", {
+        const response = await fetch("{{ base_url | safe }}/api/protected/logout", {
           method: "POST",
           credentials: "same-origin"
         });
 
         if (response.ok) {
-          window.location.href = "/";
+          window.location.href = "{{ base_url | safe }}/";
         } else {
           alert("Failed to log out. Please try again.");
         }

@@ -7,6 +7,7 @@
 mod handlers;
 mod middleware;
 mod models;
+mod renders;
 mod requests;
 mod schema;
 
@@ -20,6 +21,7 @@ use dotenv::dotenv;
 use middleware::AuthMiddleware;
 use std::env;
 use std::io::Write;
+use tera::Tera;
 
 /// Type alias for a Diesel connection pool for PostgreSQL, enabling shared access to database connections.
 type DbPool = r2d2::Pool<ConnectionManager<PgConnection>>;
@@ -35,6 +37,13 @@ type DbPool = r2d2::Pool<ConnectionManager<PgConnection>>;
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
     dotenv().ok();
+
+    let tera = Tera::new("templates/**/*").unwrap();
+    let base_url = if env::var("DEPLOY_PROD").unwrap_or_else(|_| "0".to_string()) == "1" {
+        "/vimana2"
+    } else {
+        ""
+    };
 
     env_logger::Builder::new()
         .filter_level(log::LevelFilter::Info)
@@ -59,6 +68,8 @@ async fn main() -> std::io::Result<()> {
     HttpServer::new(move || {
         App::new()
             .app_data(web::Data::new(pool.clone()))
+            .app_data(web::Data::new(tera.clone()))
+            .app_data(web::Data::new(base_url.to_string()))
             .wrap(Logger::default())
             .wrap(
                 Cors::default()
@@ -66,14 +77,11 @@ async fn main() -> std::io::Result<()> {
                     .allow_any_method()
                     .allow_any_header(),
             )
-            .route(
-                "/",
-                web::get().to(|| async { fs::NamedFile::open_async("template/login.html").await }),
-            )
+            .route("/", web::get().to(renders::render_login))
             .route(
                 "/home",
                 web::get()
-                    .to(|| async { fs::NamedFile::open_async("template/home.html").await })
+                    .to(renders::render_home)
                     .wrap(AuthMiddleware::new(pool.clone())),
             )
             .service(
