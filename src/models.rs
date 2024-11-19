@@ -51,31 +51,6 @@ pub struct NewUser {
     pub updated_at: Option<NaiveDateTime>,
 }
 
-/// Represents a vehicle associated with a user.
-///
-/// This struct maps to the `vehicles` table, storing details about each registered vehicle.
-/// - `id`: Unique identifier for the vehicle.
-/// - `vehicle_name`: Name or model of the vehicle.
-/// - `vehicle_registration`: Registration identifier for the vehicle.
-/// - `user_id`: ID of the user who owns the vehicle, allowing nullable entries for vehicles without owners.
-/// - `created_at` and `updated_at`: Optional timestamps for record tracking.
-#[derive(Selectable, Queryable, Insertable, Serialize, Deserialize)]
-#[diesel(table_name = vehicles)]
-pub struct Vehicle {
-    /// Unique identifier for the vehicle.
-    pub id: Uuid,
-    /// The name or model of the vehicle.
-    pub vehicle_name: String,
-    /// Registration number or identifier for the vehicle.
-    pub vehicle_registration: String,
-    /// Optional reference to the user ID who owns the vehicle.
-    pub user_id: Option<Uuid>,
-    /// Timestamp for when the vehicle record was created.
-    pub created_at: Option<NaiveDateTime>,
-    /// Timestamp for the last update made to the vehicle record.
-    pub updated_at: Option<NaiveDateTime>,
-}
-
 /// Represents a session for user authentication and authorization.
 ///
 /// This struct maps to the `sessions` table and contains fields related to a specific user session,
@@ -117,4 +92,28 @@ pub struct NewSession {
     pub expires_at: NaiveDateTime,
     /// Timestamp for when the session is created, useful for tracking.
     pub created_at: Option<NaiveDateTime>,
+}
+
+#[derive(Selectable, Queryable, Insertable, Serialize, Deserialize, Debug)]
+#[diesel(table_name = vehicles)]
+pub struct Vehicle {
+    pub id: Uuid,
+    pub brand: String,
+    pub model: String,
+    pub registration: String,
+    pub registration_expiry_date: chrono::NaiveDate,
+    pub user_id: Uuid,
+    pub created_at: Option<NaiveDateTime>,
+    pub updated_at: Option<NaiveDateTime>,
+}
+
+#[derive(Insertable)]
+#[diesel(table_name = vehicles)]
+pub struct NewVehicle {
+    pub id: Uuid,
+    pub brand: String,
+    pub model: String,
+    pub registration: String,
+    pub registration_expiry_date: chrono::NaiveDate,
+    pub user_id: Uuid,
 }

@@ -1,4 +1,4 @@
-use chrono::NaiveDateTime;
+use chrono::{NaiveDate, NaiveDateTime};
 use diesel::r2d2::PoolError as R2D2Error;
 use diesel::result::Error as DieselError;
 use diesel::{query_dsl::methods::FilterDsl, ExpressionMethods};
@@ -6,9 +6,7 @@ use diesel::{OptionalExtension, RunQueryDsl};
 use std::fmt;
 use uuid::Uuid;
 
-use crate::models::{NewUser, Session};
-use crate::schema::sessions::{self};
-use crate::{models::User, schema::users, DbPool};
+use crate::{models, schema, DbPool};
 
 /// Custom error type for database interactions.
 ///
@@ -54,12 +52,17 @@ impl From<DieselError> for DbError {
 /// - `Ok(Some(User))`: If the user exists.
 /// - `Ok(None)`: If no user matches the given username.
 /// - `Err(DbError)`: If there is a database-related error.
-pub fn get_user_by_username(pool: &DbPool, username: &str) -> Result<Option<User>, DbError> {
+pub fn get_user_by_username(
+    pool: &DbPool,
+    user_name: &str,
+) -> Result<Option<models::User>, DbError> {
+    use crate::schema::users::dsl::*;
+
     let mut conn = pool.get()?;
 
-    Ok(users::table
-        .filter(users::username.eq(username))
-        .first::<User>(&mut conn)
+    Ok(schema::users::table
+        .filter(username.eq(user_name))
+        .first::<models::User>(&mut conn)
         .optional()?)
 }
 
@@ -72,10 +75,10 @@ pub fn get_user_by_username(pool: &DbPool, username: &str) -> Result<Option<User
 /// # Returns
 /// - `Ok(usize)`: The number of rows inserted (typically 1).
 /// - `Err(DbError)`: If there is a database-related error.
-pub fn create_new_session(pool: &DbPool, session_data: &Session) -> Result<usize, DbError> {
+pub fn create_new_session(pool: &DbPool, session_data: &models::Session) -> Result<usize, DbError> {
     let mut conn = pool.get()?;
 
-    Ok(diesel::insert_into(sessions::table)
+    Ok(diesel::insert_into(schema::sessions::table)
         .values(session_data)
         .execute(&mut conn)?)
 }
@@ -95,7 +98,7 @@ pub fn get_active_session_by_token(
     pool: &DbPool,
     token: &str,
     current_time: NaiveDateTime,
-) -> Result<Option<Session>, DbError> {
+) -> Result<Option<models::Session>, DbError> {
     use crate::schema::sessions::dsl::*;
 
     let mut conn = pool.get()?;
@@ -103,7 +106,7 @@ pub fn get_active_session_by_token(
     Ok(sessions
         .filter(session_token.eq(token))
         .filter(expires_at.gt(current_time))
-        .first::<Session>(&mut conn)
+        .first::<models::Session>(&mut conn)
         .optional()?)
 }
 
@@ -121,9 +124,9 @@ pub fn delete_session(pool: &DbPool, user_id: Uuid, token: &str) -> Result<usize
     let mut conn = pool.get()?;
 
     Ok(diesel::delete(
-        sessions::table
-            .filter(sessions::user_id.eq(user_id))
-            .filter(sessions::session_token.eq(token)),
+        schema::sessions::table
+            .filter(schema::sessions::user_id.eq(user_id))
+            .filter(schema::sessions::session_token.eq(token)),
     )
     .execute(&mut conn)?)
 }
@@ -137,10 +140,134 @@ pub fn delete_session(pool: &DbPool, user_id: Uuid, token: &str) -> Result<usize
 /// # Returns
 /// - `Ok(User)`: The created user record.
 /// - `Err(DbError)`: If there is a database-related error.
-pub fn create_new_user(pool: &DbPool, user_data: &NewUser) -> Result<User, DbError> {
+pub fn create_new_user(
+    pool: &DbPool,
+    user_data: &models::NewUser,
+) -> Result<models::User, DbError> {
     let mut conn = pool.get()?;
 
-    Ok(diesel::insert_into(users::table)
+    Ok(diesel::insert_into(schema::users::table)
         .values(user_data)
-        .get_result::<User>(&mut conn)?)
+        .get_result::<models::User>(&mut conn)?)
+}
+
+/// Creates a new vehicle record in the database.
+///
+/// # Arguments
+/// - `pool`: Database connection pool.
+/// - `new_vehicle`: The vehicle data to insert.
+///
+/// # Returns
+/// - `Ok(Vehicle)`: The newly created vehicle.
+/// - `Err(DbError)`: If the query fails.
+pub fn create_vehicle(
+    pool: &DbPool,
+    new_vehicle: &models::NewVehicle,
+) -> Result<models::Vehicle, DbError> {
+    let mut conn = pool.get()?;
+    Ok(diesel::insert_into(schema::vehicles::table)
+        .values(new_vehicle)
+        .get_result::<models::Vehicle>(&mut conn)?)
+}
+
+/// Retrieves all vehicles owned by a specific user.
+///
+/// # Arguments
+/// - `pool`: Database connection pool.
+/// - `user_id`: The ID of the user.
+///
+/// # Returns
+/// - `Ok(Vec<Vehicle>)`: A list of vehicles owned by the user.
+/// - `Err(DbError)`: If the query fails.
+pub fn get_vehicles_by_user_id(
+    pool: &DbPool,
+    user_id_value: Uuid,
+) -> Result<Vec<models::Vehicle>, DbError> {
+    use crate::schema::vehicles::dsl::*;
+
+    let mut conn = pool.get()?;
+
+    Ok(schema::vehicles::table
+        .filter(user_id.eq(user_id_value))
+        .load::<models::Vehicle>(&mut conn)?)
+}
+
+/// Retrieves a vehicle by its ID.
+///
+/// # Arguments
+/// - `pool`: Database connection pool.
+/// - `vehicle_id`: The ID of the vehicle.
+///
+/// # Returns
+/// - `Ok(Some(Vehicle))`: The vehicle data, if found.
+/// - `Ok(None)`: If no vehicle matches the given ID.
+/// - `Err(DbError)`: If the query fails.
+pub fn get_vehicle_by_id(
+    pool: &DbPool,
+    vehicle_id_value: Uuid,
+) -> Result<Option<models::Vehicle>, DbError> {
+    use crate::schema::vehicles::dsl::*;
+
+    let mut conn = pool.get()?;
+
+    Ok(schema::vehicles::table
+        .filter(id.eq(vehicle_id_value))
+        .first::<models::Vehicle>(&mut conn)
+        .optional()?)
+}
+
+/// Updates a vehicle by its ID.
+///
+/// # Arguments
+/// - `pool`: Database connection pool.
+/// - `vehicle_id`: The ID of the vehicle to update.
+/// - `new_brand`: Updated brand (optional).
+/// - `new_model`: Updated model (optional).
+/// - `new_registration`: Updated registration (optional).
+/// - `new_registration_expiry_date`: Updated registration expiry date (optional).
+///
+/// # Returns
+/// - `Ok(Vehicle)`: The updated vehicle data.
+/// - `Err(DbError)`: If the query fails.
+pub fn update_vehicle_by_id(
+    pool: &DbPool,
+    vehicle_id_value: Uuid,
+    new_brand: Option<String>,
+    new_model: Option<String>,
+    new_registration: Option<String>,
+    new_registration_expiry_date: Option<NaiveDate>,
+) -> Result<models::Vehicle, DbError> {
+    use crate::schema::vehicles::dsl::*;
+
+    let mut conn = pool.get()?;
+
+    diesel::update(vehicles.filter(id.eq(vehicle_id_value)))
+        .set((
+            new_brand.map(|val| brand.eq(val)),
+            new_model.map(|val| model.eq(val)),
+            new_registration.map(|val| registration.eq(val)),
+            new_registration_expiry_date.map(|val| registration_expiry_date.eq(val)),
+            updated_at.eq(chrono::Utc::now().naive_utc()),
+        ))
+        .execute(&mut conn)?;
+
+    get_vehicle_by_id(pool, vehicle_id_value)?
+        .ok_or_else(|| DbError::QueryError(diesel::result::Error::NotFound))
+}
+
+/// Deletes a vehicle by its ID.
+///
+/// # Arguments
+/// - `pool`: Database connection pool.
+/// - `vehicle_id`: The ID of the vehicle to delete.
+///
+/// # Returns
+/// - `Ok(usize)`: Number of rows deleted.
+/// - `Err(DbError)`: If the query fails.
+pub fn delete_vehicle_by_id(pool: &DbPool, vehicle_id_value: Uuid) -> Result<usize, DbError> {
+    use crate::schema::vehicles::dsl::*;
+
+    let mut conn = pool.get()?;
+
+    Ok(diesel::delete(vehicles.filter(id.eq(vehicle_id_value))).execute(&mut conn)?)
 }

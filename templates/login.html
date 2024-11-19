@@ -46,7 +46,12 @@
   <script>
     document.getElementById("loginForm").addEventListener("submit", async function (event) {
       event.preventDefault();
-      const username = document.getElementById("username").value;
+
+      // Clear previous error messages
+      const messageDiv = document.getElementById("message");
+      messageDiv.innerText = "";
+
+      const username = document.getElementById("username").value.trim();
       const password = document.getElementById("password").value;
 
       try {
@@ -59,12 +64,26 @@
         });
 
         if (response.ok) {
+          // Parse plain text response body
+          const responseText = await response.text();
+
+          // Redirect to home page if login is successful
+          console.log(responseText); // "Logged in successfully"
           window.location.href = "{{ base_url | safe }}/home";
         } else {
-          document.getElementById("message").innerText = "Invalid username or password.";
+          // Handle specific error codes
+          const errorData = await response.json().catch(() => ({})); // Fallback to empty object if not JSON
+          if (response.status === 401) {
+            messageDiv.innerText = "Unauthorized: Invalid username or password.";
+          } else if (response.status === 422) {
+            messageDiv.innerText = "Validation Error: " + (errorData.error || "Invalid input.");
+          } else {
+            messageDiv.innerText = "Error: " + (errorData.error || "An unexpected error occurred.");
+          }
         }
       } catch (error) {
-        document.getElementById("message").innerText = "An error occurred. Please try again.";
+        // Handle network or unexpected errors
+        messageDiv.innerText = "An error occurred. Please try again later.";
       }
     });
   </script>

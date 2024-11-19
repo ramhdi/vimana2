@@ -24,9 +24,11 @@ diesel::table! {
 diesel::table! {
     vehicles (id) {
         id -> Uuid,
-        vehicle_name -> Text,
-        vehicle_registration -> Text,
-        user_id -> Nullable<Uuid>,
+        brand -> Text,
+        model -> Text,
+        registration -> Text,
+        registration_expiry_date -> Date,
+        user_id -> Uuid,
         created_at -> Nullable<Timestamptz>,
         updated_at -> Nullable<Timestamptz>,
     }
@@ -35,4 +37,8 @@ diesel::table! {
 diesel::joinable!(sessions -> users (user_id));
 diesel::joinable!(vehicles -> users (user_id));
 
-diesel::allow_tables_to_appear_in_same_query!(sessions, users, vehicles,);
+diesel::allow_tables_to_appear_in_same_query!(
+    sessions,
+    users,
+    vehicles,
+);

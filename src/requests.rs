@@ -1,3 +1,4 @@
+use chrono::NaiveDate;
 use serde::Deserialize;
 
 /// Represents a login request with credentials provided by the user.
@@ -28,4 +29,42 @@ pub struct NewUserRequest {
     pub password: String,
     /// Full name of the user, used for display and identification purposes.
     pub full_name: String,
+}
+
+/// Represents a request to create a new vehicle.
+///
+/// This struct is used to parse incoming requests for creating vehicles, containing:
+/// - `brand`: Brand name of the vehicle.
+/// - `model`: Model name of the vehicle.
+/// - `registration`: Registration number for the vehicle.
+/// - `registration_expiry_date`: Expiration date of the vehicle's registration.
+#[derive(Deserialize)]
+pub struct NewVehicleRequest {
+    /// Brand name of the vehicle.
+    pub brand: String,
+    /// Model name of the vehicle.
+    pub model: String,
+    /// Registration number for the vehicle.
+    pub registration: String,
+    /// Expiration date of the vehicle's registration.
+    pub registration_expiry_date: NaiveDate,
+}
+
+/// Represents a request to update an existing vehicle.
+///
+/// This struct is used to parse incoming requests for updating vehicle details, containing:
+/// - `brand`: Optional updated brand name.
+/// - `model`: Optional updated model name.
+/// - `registration`: Optional updated registration number.
+/// - `registration_expiry_date`: Optional updated expiration date for the vehicle's registration.
+#[derive(Deserialize)]
+pub struct UpdateVehicleRequest {
+    /// Updated brand name (optional).
+    pub brand: Option<String>,
+    /// Updated model name (optional).
+    pub model: Option<String>,
+    /// Updated registration number (optional).
+    pub registration: Option<String>,
+    /// Updated expiration date for the registration (optional).
+    pub registration_expiry_date: Option<NaiveDate>,
 }

@@ -1,12 +1,12 @@
 use crate::{
-    models::{NewUser, Session, User},
+    models::{NewUser, NewVehicle, Session, User, Vehicle},
     queries::{self, DbError},
     requests::LoginRequest,
     DbPool,
 };
 use actix_web::http::StatusCode;
 use bcrypt::{hash, verify, DEFAULT_COST};
-use chrono::{Duration, Utc};
+use chrono::{Duration, NaiveDate, Utc};
 use rand::{distributions::Alphanumeric, Rng};
 use std::fmt;
 use uuid::Uuid;
@@ -176,5 +176,112 @@ pub async fn create_user(
         Ok(new_user)
     } else {
         Err(ServiceError::Forbidden("Forbidden".to_string()))
+    }
+}
+
+/// Service to create a new vehicle.
+///
+/// Validates the input and calls the `create_vehicle` query.
+///
+/// # Arguments
+/// - `pool`: Database connection pool.
+/// - `new_vehicle`: The vehicle data to insert.
+///
+/// # Returns
+/// - `Ok(Vehicle)`: The newly created vehicle.
+/// - `Err(ServiceError)`: If the operation fails.
+pub async fn create_vehicle(
+    pool: &DbPool,
+    new_vehicle: &NewVehicle,
+) -> Result<Vehicle, ServiceError> {
+    queries::create_vehicle(pool, new_vehicle).map_err(ServiceError::DbError)
+}
+
+/// Service to get all vehicles owned by a specific user.
+///
+/// Calls the `get_vehicles_by_user_id` query.
+///
+/// # Arguments
+/// - `pool`: Database connection pool.
+/// - `user_id`: The ID of the user.
+///
+/// # Returns
+/// - `Ok(Vec<Vehicle>)`: A list of vehicles owned by the user.
+/// - `Err(ServiceError)`: If the operation fails.
+pub async fn get_vehicles_by_user_id(
+    pool: &DbPool,
+    user_id: Uuid,
+) -> Result<Vec<Vehicle>, ServiceError> {
+    queries::get_vehicles_by_user_id(pool, user_id).map_err(ServiceError::DbError)
+}
+
+/// Service to get a vehicle by its ID.
+///
+/// Calls the `get_vehicle_by_id` query.
+///
+/// # Arguments
+/// - `pool`: Database connection pool.
+/// - `vehicle_id`: The ID of the vehicle.
+///
+/// # Returns
+/// - `Ok(Vehicle)`: The vehicle data, if found.
+/// - `Err(ServiceError::NotFound)`: If the vehicle does not exist.
+/// - `Err(ServiceError)`: If the operation fails.
+pub async fn get_vehicle_by_id(pool: &DbPool, vehicle_id: Uuid) -> Result<Vehicle, ServiceError> {
+    queries::get_vehicle_by_id(pool, vehicle_id)?
+        .ok_or_else(|| ServiceError::NotFound("Vehicle not found".to_string()))
+}
+
+/// Service to update a vehicle by its ID.
+///
+/// Calls the `update_vehicle_by_id` query and validates the input fields.
+///
+/// # Arguments
+/// - `pool`: Database connection pool.
+/// - `vehicle_id`: The ID of the vehicle to update.
+/// - `new_brand`: Updated brand (optional).
+/// - `new_model`: Updated model (optional).
+/// - `new_registration`: Updated registration (optional).
+/// - `new_registration_expiry_date`: Updated registration expiry date (optional).
+///
+/// # Returns
+/// - `Ok(Vehicle)`: The updated vehicle data.
+/// - `Err(ServiceError::NotFound)`: If the vehicle does not exist.
+/// - `Err(ServiceError)`: If the operation fails.
+pub async fn update_vehicle_by_id(
+    pool: &DbPool,
+    vehicle_id: Uuid,
+    new_brand: Option<String>,
+    new_model: Option<String>,
+    new_registration: Option<String>,
+    new_registration_expiry_date: Option<NaiveDate>,
+) -> Result<Vehicle, ServiceError> {
+    queries::update_vehicle_by_id(
+        pool,
+        vehicle_id,
+        new_brand,
+        new_model,
+        new_registration,
+        new_registration_expiry_date,
+    )
+    .map_err(ServiceError::DbError)
+}
+
+/// Service to delete a vehicle by its ID.
+///
+/// Calls the `delete_vehicle_by_id` query.
+///
+/// # Arguments
+/// - `pool`: Database connection pool.
+/// - `vehicle_id`: The ID of the vehicle to delete.
+///
+/// # Returns
+/// - `Ok(())`: If the vehicle was deleted.
+/// - `Err(ServiceError::NotFound)`: If the vehicle does not exist.
+/// - `Err(ServiceError)`: If the operation fails.
+pub async fn delete_vehicle_by_id(pool: &DbPool, vehicle_id: Uuid) -> Result<(), ServiceError> {
+    match queries::delete_vehicle_by_id(pool, vehicle_id)? {
+        0 => Err(ServiceError::NotFound("Vehicle not found".to_string())),
+        _ => Ok(()),
     }
 }

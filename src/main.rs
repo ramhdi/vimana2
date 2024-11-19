@@ -98,7 +98,24 @@ async fn main() -> std::io::Result<()> {
                             .wrap(AuthMiddleware::new(pool.clone()))
                             .route("/health", web::get().to(handlers::health_check))
                             .route("/logout", web::post().to(handlers::logout))
-                            .route("/users", web::post().to(handlers::create_user)),
+                            .route("/users", web::post().to(handlers::create_user))
+                            .service(
+                                web::scope("/vehicles")
+                                    .route("/", web::post().to(handlers::create_vehicle))
+                                    .route("/", web::get().to(handlers::get_vehicles_by_user))
+                                    .route(
+                                        "/{vehicle_id}",
+                                        web::get().to(handlers::get_vehicle_by_id),
+                                    )
+                                    .route(
+                                        "/{vehicle_id}",
+                                        web::put().to(handlers::update_vehicle_by_id),
+                                    )
+                                    .route(
+                                        "/{vehicle_id}",
+                                        web::delete().to(handlers::delete_vehicle_by_id),
+                                    ),
+                            ),
                     ),
             )
             .service(fs::Files::new("/static", "./static").show_files_listing())

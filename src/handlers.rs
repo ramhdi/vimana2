@@ -1,7 +1,9 @@
 use crate::middleware::AuthenticatedRequest;
-use crate::requests::{LoginRequest, NewUserRequest};
+use crate::models::NewVehicle;
+use crate::requests::{LoginRequest, NewUserRequest, NewVehicleRequest, UpdateVehicleRequest};
 use crate::{services, DbPool};
 use actix_web::{web, Error, HttpRequest, HttpResponse};
+use uuid::Uuid;
 
 /// Health check handler that verifies server and database connectivity.
 ///
@@ -126,6 +128,135 @@ pub async fn create_user(
     .await
     {
         Ok(new_user) => Ok(HttpResponse::Created().body(new_user.id.to_string())),
+        Err(e) => Err(e.into()),
+    }
+}
+
+/// Handler to create a new vehicle.
+///
+/// # Arguments
+/// - `pool`: Database connection pool.
+/// - `new_vehicle`: The new vehicle data.
+/// - `req`: HTTP request object (for extracting user ID).
+///
+/// # Returns
+/// - `201 Created` with the new vehicle data if successful.
+/// - Appropriate HTTP error code if the operation fails.
+pub async fn create_vehicle(
+    pool: web::Data<DbPool>,
+    new_vehicle: web::Json<NewVehicleRequest>,
+    req: HttpRequest,
+) -> Result<HttpResponse, Error> {
+    let user_id = req
+        .authenticated_user_id()
+        .ok_or_else(|| actix_web::error::ErrorInternalServerError("Internal server error"))?;
+
+    let new_vehicle = new_vehicle.into_inner();
+    let new_vehicle = NewVehicle {
+        id: uuid::Uuid::new_v4(),
+        brand: new_vehicle.brand,
+        model: new_vehicle.model,
+        registration: new_vehicle.registration,
+        registration_expiry_date: new_vehicle.registration_expiry_date,
+        user_id,
+    };
+
+    let vehicle_data = services::create_vehicle(&pool, &new_vehicle).await;
+
+    match vehicle_data {
+        Ok(vehicle) => Ok(HttpResponse::Created().json(vehicle)),
+        Err(e) => Err(e.into()),
+    }
+}
+
+/// Handler to get all vehicles owned by the authenticated user.
+///
+/// # Arguments
+/// - `pool`: Database connection pool.
+/// - `req`: HTTP request object (for extracting user ID).
+///
+/// # Returns
+/// - `200 OK` with a list of vehicles.
+/// - Appropriate HTTP error code if the operation fails.
+pub async fn get_vehicles_by_user(
+    pool: web::Data<DbPool>,
+    req: HttpRequest,
+) -> Result<HttpResponse, Error> {
+    let user_id = req
+        .authenticated_user_id()
+        .ok_or_else(|| actix_web::error::ErrorInternalServerError("Internal server error"))?;
+
+    match services::get_vehicles_by_user_id(&pool, user_id).await {
+        Ok(vehicles) => Ok(HttpResponse::Ok().json(vehicles)),
+        Err(e) => Err(e.into()),
+    }
+}
+
+/// Handler to get a vehicle by its ID.
+///
+/// # Arguments
+/// - `pool`: Database connection pool.
+/// - `vehicle_id`: The vehicle ID.
+///
+/// # Returns
+/// - `200 OK` with the vehicle data if found.
+/// - Appropriate HTTP error code if the operation fails.
+pub async fn get_vehicle_by_id(
+    pool: web::Data<DbPool>,
+    vehicle_id: web::Path<Uuid>,
+) -> Result<HttpResponse, Error> {
+    match services::get_vehicle_by_id(&pool, vehicle_id.into_inner()).await {
+        Ok(vehicle) => Ok(HttpResponse::Ok().json(vehicle)),
+        Err(e) => Err(e.into()),
+    }
+}
+
+/// Handler to update a vehicle by its ID.
+///
+/// # Arguments
+/// - `pool`: Database connection pool.
+/// - `vehicle_id`: The vehicle ID.
+/// - `update_data`: The updated vehicle data.
+///
+/// # Returns
+/// - `200 OK` with the updated vehicle data if successful.
+/// - Appropriate HTTP error code if the operation fails.
+pub async fn update_vehicle_by_id(
+    pool: web::Data<DbPool>,
+    vehicle_id: web::Path<Uuid>,
+    update_data: web::Json<UpdateVehicleRequest>,
+) -> Result<HttpResponse, Error> {
+    let update_data = update_data.into_inner();
+    match services::update_vehicle_by_id(
+        &pool,
+        vehicle_id.into_inner(),
+        update_data.brand,
+        update_data.model,
+        update_data.registration,
+        update_data.registration_expiry_date,
+    )
+    .await
+    {
+        Ok(vehicle) => Ok(HttpResponse::Ok().json(vehicle)),
+        Err(e) => Err(e.into()),
+    }
+}
+
+/// Handler to delete a vehicle by its ID.
+///
+/// # Arguments
+/// - `pool`: Database connection pool.
+/// - `vehicle_id`: The vehicle ID.
+///
+/// # Returns
+/// - `204 No Content` if the vehicle was deleted successfully.
+/// - Appropriate HTTP error code if the operation fails.
+pub async fn delete_vehicle_by_id(
+    pool: web::Data<DbPool>,
+    vehicle_id: web::Path<Uuid>,
+) -> Result<HttpResponse, Error> {
+    match services::delete_vehicle_by_id(&pool, vehicle_id.into_inner()).await {
+        Ok(_) => Ok(HttpResponse::NoContent().finish()),
         Err(e) => Err(e.into()),
     }
 }
