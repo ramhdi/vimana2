@@ -11,6 +11,7 @@ mod queries;
 mod renders;
 mod requests;
 mod schema;
+mod services;
 
 use actix_cors::Cors;
 use actix_files as fs;

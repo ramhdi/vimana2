@@ -1,19 +1,7 @@
-use actix_web::{web, Error, HttpRequest, HttpResponse};
-use bcrypt::{hash, verify, DEFAULT_COST};
-use chrono::{Duration, Utc};
-use rand::{distributions::Alphanumeric, Rng};
-use uuid::Uuid;
-
 use crate::middleware::AuthenticatedRequest;
-use crate::models::{NewUser, Session};
 use crate::requests::{LoginRequest, NewUserRequest};
-use crate::{queries, DbPool};
-
-const SUPERUSER_ID_STR: &str = "7763abad-f33d-4308-b89d-8897e9037d16";
-lazy_static::lazy_static! {
-    /// Static reference to the superuser UUID, used for authorization checks.
-    static ref SUPERUSER_ID: Uuid = Uuid::parse_str(SUPERUSER_ID_STR).expect("Invalid superuser ID format");
-}
+use crate::{services, DbPool};
+use actix_web::{web, Error, HttpRequest, HttpResponse};
 
 /// Health check handler that verifies server and database connectivity.
 ///
@@ -49,53 +37,17 @@ pub async fn login(
         base_url.as_str()
     };
 
-    let user = queries::get_user_by_username(&pool, &req.username)
-        .map_err(|e| actix_web::error::ErrorInternalServerError(e))?
-        .ok_or_else(|| actix_web::error::ErrorUnauthorized("Invalid username or password"))?;
-
-    let is_valid = verify(&req.password, &user.hashed_password)
-        .map_err(|_| actix_web::error::ErrorInternalServerError("Password verification error"))?;
-
-    match is_valid {
-        true => {
-            let session_token: String = rand::thread_rng()
-                .sample_iter(&Alphanumeric)
-                .take(30)
-                .map(char::from)
-                .collect();
-
-            let expires_at = Utc::now() + Duration::days(1);
-
-            queries::create_new_session(
-                &pool,
-                &Session {
-                    id: Uuid::new_v4(),
-                    user_id: Some(user.id),
-                    session_token: session_token.clone(),
-                    expires_at: expires_at.naive_utc(),
-                    created_at: Some(Utc::now().naive_utc()),
-                },
+    match services::login(&pool, &req).await {
+        Ok(session_token) => Ok(HttpResponse::Ok()
+            .cookie(
+                actix_web::cookie::Cookie::build("session_token", session_token)
+                    .path(base_url)
+                    .http_only(true)
+                    .max_age(actix_web::cookie::time::Duration::days(1))
+                    .finish(),
             )
-            .map_err(|_| {
-                actix_web::error::ErrorInternalServerError(
-                    "Failed to execute query to the database",
-                )
-            })?;
-
-            Ok(HttpResponse::Ok()
-                .cookie(
-                    actix_web::cookie::Cookie::build("session_token", session_token)
-                        .path(base_url)
-                        .http_only(true)
-                        .max_age(actix_web::cookie::time::Duration::days(1))
-                        .finish(),
-                )
-                .body("Logged in successfully"))
-        }
-
-        false => Err(actix_web::error::ErrorUnauthorized(
-            "Invalid username or password",
-        )),
+            .body("Logged in successfully")),
+        Err(e) => Err(e.into()),
     }
 }
 
@@ -130,12 +82,8 @@ pub async fn logout(
         .map(|cookie| cookie.value().to_string())
         .ok_or_else(|| actix_web::error::ErrorUnauthorized("Unauthorized"))?;
 
-    let num_deleted = queries::delete_session(&pool, user_id, &token)
-        .map_err(|_| actix_web::error::ErrorInternalServerError("Error logging out"))?;
-
-    match num_deleted {
-        0 => Err(actix_web::error::ErrorNotFound("Session not found")),
-        _ => Ok(HttpResponse::Ok()
+    match services::logout(&pool, user_id, &token).await {
+        Ok(()) => Ok(HttpResponse::Ok()
             .cookie(
                 actix_web::cookie::Cookie::build("session_token", "")
                     .path(base_url)
@@ -144,6 +92,7 @@ pub async fn logout(
                     .finish(),
             )
             .body("Logged out successfully")),
+        Err(e) => Err(e.into()),
     }
 }
 
@@ -167,25 +116,16 @@ pub async fn create_user(
         .authenticated_user_id()
         .ok_or_else(|| actix_web::error::ErrorInternalServerError("Internal server error"))?;
 
-    if user_id == *SUPERUSER_ID {
-        let hashed_password = hash(&new_user.password, DEFAULT_COST)
-            .map_err(|_| actix_web::error::ErrorInternalServerError("Failed to hash password"))?;
-
-        let new_user = NewUser {
-            id: Uuid::new_v4(),
-            username: new_user.username.clone(),
-            hashed_password,
-            full_name: new_user.full_name.clone(),
-            created_at: None,
-            updated_at: None,
-        };
-
-        let new_user = queries::create_new_user(&pool, &new_user).map_err(|_| {
-            actix_web::error::ErrorInternalServerError("Failed to execute query to the database")
-        })?;
-
-        Ok(HttpResponse::Created().body(new_user.id.to_string()))
-    } else {
-        Err(actix_web::error::ErrorUnauthorized("Unauthorized"))
+    match services::create_user(
+        &pool,
+        user_id,
+        new_user.username.clone(),
+        new_user.password.clone(),
+        new_user.full_name.clone(),
+    )
+    .await
+    {
+        Ok(new_user) => Ok(HttpResponse::Created().body(new_user.id.to_string())),
+        Err(e) => Err(e.into()),
     }
 }

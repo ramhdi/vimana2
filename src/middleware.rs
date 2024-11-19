@@ -5,7 +5,6 @@ use actix_web::{
 };
 use chrono::Utc;
 use diesel::{
-    prelude::*,
     r2d2::{ConnectionManager, Pool},
     PgConnection,
 };
@@ -16,7 +15,7 @@ use std::{
 };
 use uuid::Uuid;
 
-use crate::models::Session;
+use crate::queries;
 
 /// Custom error type representing possible authentication errors in the middleware.
 ///
@@ -30,7 +29,7 @@ pub enum AuthError {
     InvalidToken,
     ExpiredSession,
     SessionNotFound,
-    DatabaseError(diesel::result::Error),
+    DbError(queries::DbError),
 }
 
 impl std::fmt::Display for AuthError {
@@ -39,7 +38,7 @@ impl std::fmt::Display for AuthError {
             AuthError::InvalidToken => write!(f, "Invalid session token"),
             AuthError::ExpiredSession => write!(f, "Session has expired"),
             AuthError::SessionNotFound => write!(f, "Session not found"),
-            AuthError::DatabaseError(e) => write!(f, "Database error: {}", e),
+            AuthError::DbError(e) => write!(f, "Database error: {}", e),
         }
     }
 }
@@ -129,34 +128,17 @@ where
                 .value()
                 .to_string();
 
-            // Establish a connection from the pool
-            let mut conn = pool.get().map_err(|e| {
-                AuthError::DatabaseError(diesel::result::Error::DatabaseError(
-                    diesel::result::DatabaseErrorKind::Unknown,
-                    Box::new(e.to_string()),
-                ))
-            })?;
+            let session =
+                queries::get_active_session_by_token(&pool, &token, Utc::now().naive_utc())
+                    .map_err(AuthError::DbError)?
+                    .ok_or_else(|| AuthError::SessionNotFound)?;
 
-            // Verify session in the database
-            use crate::schema::sessions::dsl::*;
-            let session = sessions
-                .filter(session_token.eq(token))
-                .filter(expires_at.gt(Utc::now().naive_utc()))
-                .first::<Session>(&mut conn)
-                .optional()
-                .map_err(AuthError::DatabaseError)?;
+            let uid = session
+                .user_id
+                .ok_or_else(|| ErrorUnauthorized("User ID missing in session"))?;
 
-            match session {
-                Some(session) => {
-                    if let Some(uid) = session.user_id {
-                        req.extensions_mut().insert(uid);
-                    } else {
-                        return Err(ErrorUnauthorized("User ID missing in session"));
-                    }
-                    service.call(req).await
-                }
-                None => Err(AuthError::SessionNotFound.into()),
-            }
+            req.extensions_mut().insert(uid);
+            service.call(req).await
         })
     }
 }
