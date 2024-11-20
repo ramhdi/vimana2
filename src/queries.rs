@@ -1,7 +1,7 @@
 use chrono::{NaiveDate, NaiveDateTime};
 use diesel::r2d2::PoolError as R2D2Error;
 use diesel::result::Error as DieselError;
-use diesel::{query_dsl::methods::FilterDsl, ExpressionMethods};
+use diesel::{ExpressionMethods, QueryDsl};
 use diesel::{OptionalExtension, RunQueryDsl};
 use std::fmt;
 use uuid::Uuid;
@@ -75,7 +75,10 @@ pub fn get_user_by_username(
 /// # Returns
 /// - `Ok(usize)`: The number of rows inserted (typically 1).
 /// - `Err(DbError)`: If there is a database-related error.
-pub fn create_new_session(pool: &DbPool, session_data: &models::Session) -> Result<usize, DbError> {
+pub fn create_new_session(
+    pool: &DbPool,
+    session_data: &models::NewSession,
+) -> Result<usize, DbError> {
     let mut conn = pool.get()?;
 
     Ok(diesel::insert_into(schema::sessions::table)
@@ -270,4 +273,214 @@ pub fn delete_vehicle_by_id(pool: &DbPool, vehicle_id_value: Uuid) -> Result<usi
     let mut conn = pool.get()?;
 
     Ok(diesel::delete(vehicles.filter(id.eq(vehicle_id_value))).execute(&mut conn)?)
+}
+
+/// Creates a new odometer entry for a specific vehicle.
+///
+/// # Arguments
+/// - `pool`: Database connection pool.
+/// - `vehicle_id`: The ID of the vehicle.
+/// - `odometer_value`: The odometer reading.
+/// - `timestamp`: Optional timestamp for the odometer entry.
+///
+/// # Returns
+/// - `Ok(Odometer)`: The newly created odometer entry.
+/// - `Err(DbError)`: If the query fails.
+pub fn create_new_odometer(
+    pool: &DbPool,
+    vehicle_id: Uuid,
+    odometer_value: f32,
+    timestamp: Option<NaiveDateTime>,
+) -> Result<models::Odometer, DbError> {
+    use crate::schema::odometer;
+
+    let mut conn = pool.get()?;
+    let new_odometer = models::NewOdometer {
+        vehicle_id,
+        odometer_value,
+    };
+
+    diesel::insert_into(odometer::table)
+        .values((
+            &new_odometer,
+            timestamp.map(|ts| odometer::timestamp.eq(ts)),
+        ))
+        .get_result::<models::Odometer>(&mut conn)
+        .map_err(DbError::from)
+}
+
+/// Retrieves the latest odometer entry for a specific vehicle.
+///
+/// # Arguments
+/// - `pool`: Database connection pool.
+/// - `vehicle_id`: The ID of the vehicle.
+///
+/// # Returns
+/// - `Ok(Some(Odometer))`: The latest odometer entry.
+/// - `Ok(None)`: If no odometer entry exists.
+/// - `Err(DbError)`: If the query fails.
+pub fn get_latest_odometer(
+    pool: &DbPool,
+    vehicle_id: Uuid,
+) -> Result<Option<models::Odometer>, DbError> {
+    use crate::schema::odometer::dsl;
+
+    let mut conn = pool.get()?;
+    Ok(dsl::odometer
+        .filter(dsl::vehicle_id.eq(vehicle_id))
+        .order(dsl::timestamp.desc())
+        .first::<models::Odometer>(&mut conn)
+        .optional()?)
+}
+
+/// Retrieves time-series odometer data for a specific vehicle within a date range.
+///
+/// # Arguments
+/// - `pool`: Database connection pool.
+/// - `vehicle_id`: The ID of the vehicle.
+/// - `start`: The start date/time of the range.
+/// - `end`: The end date/time of the range.
+///
+/// # Returns
+/// - `Ok(Vec<Odometer>)`: A list of odometer entries.
+/// - `Err(DbError)`: If the query fails.
+pub fn get_odometer_timeseries(
+    pool: &DbPool,
+    vehicle_id: Uuid,
+    start: NaiveDateTime,
+    end: NaiveDateTime,
+) -> Result<Vec<models::Odometer>, DbError> {
+    use crate::schema::odometer::dsl;
+
+    let mut conn = pool.get()?;
+    Ok(dsl::odometer
+        .filter(dsl::vehicle_id.eq(vehicle_id))
+        .filter(dsl::timestamp.between(start, end))
+        .order(dsl::timestamp.asc())
+        .load::<models::Odometer>(&mut conn)?)
+}
+
+/// Creates a new refueling entry for a specific vehicle, along with an associated odometer entry.
+///
+/// # Arguments
+/// - `pool`: Database connection pool.
+/// - `vehicle_id`: The ID of the vehicle.
+/// - `refuel_quantity`: The quantity of fuel.
+/// - `odometer_value`: The odometer reading.
+/// - `timestamp`: Optional timestamp for the refueling event.
+///
+/// # Returns
+/// - `Ok(RefuelWithOdometer)`: The newly created refueling entry with odometer details.
+/// - `Err(DbError)`: If the query fails.
+pub fn create_new_refuel(
+    pool: &DbPool,
+    vehicle_id: Uuid,
+    refuel_quantity: f32,
+    odometer_value: f32,
+    timestamp: Option<NaiveDateTime>,
+) -> Result<models::RefuelWithOdometer, DbError> {
+    use crate::schema::{odometer, refuel};
+    use diesel::prelude::*;
+
+    let mut conn = pool.get()?;
+
+    conn.transaction(|conn| {
+        let new_odometer = diesel::insert_into(odometer::table)
+            .values((
+                odometer::vehicle_id.eq(vehicle_id),
+                odometer::odometer_value.eq(odometer_value),
+                timestamp.map(|ts| odometer::timestamp.eq(ts)),
+            ))
+            .get_result::<models::Odometer>(conn)?;
+
+        let new_refuel = diesel::insert_into(refuel::table)
+            .values((
+                refuel::vehicle_id.eq(vehicle_id),
+                refuel::odometer_id.eq(new_odometer.id),
+                refuel::refuel_quantity.eq(refuel_quantity),
+                timestamp.map(|ts| refuel::timestamp.eq(ts)),
+            ))
+            .get_result::<models::Refuel>(conn)?;
+
+        let result = models::RefuelWithOdometer {
+            id: new_refuel.id,
+            vehicle_id: new_refuel.vehicle_id,
+            odometer_id: new_refuel.odometer_id,
+            refuel_quantity: new_refuel.refuel_quantity,
+            odometer_value: new_odometer.odometer_value,
+            timestamp: new_refuel.timestamp,
+        };
+
+        Ok::<models::RefuelWithOdometer, DbError>(result)
+    })
+    .map_err(DbError::from)
+}
+
+/// Retrieves the latest refueling entry for a specific vehicle.
+///
+/// # Arguments
+/// - `pool`: Database connection pool.
+/// - `vehicle_id`: The ID of the vehicle.
+///
+/// # Returns
+/// - `Ok(Some(RefuelWithOdometer))`: The latest refueling entry.
+/// - `Ok(None)`: If no refueling entry exists.
+/// - `Err(DbError)`: If the query fails.
+pub fn get_latest_refuel(
+    pool: &DbPool,
+    vehicle_id: Uuid,
+) -> Result<Option<models::RefuelWithOdometer>, DbError> {
+    use crate::schema::{odometer, refuel};
+
+    let mut conn = pool.get()?;
+    Ok(refuel::table
+        .inner_join(odometer::table)
+        .filter(refuel::vehicle_id.eq(vehicle_id))
+        .order(refuel::timestamp.desc())
+        .select((
+            refuel::id,
+            refuel::vehicle_id,
+            refuel::odometer_id,
+            refuel::refuel_quantity,
+            odometer::odometer_value,
+            refuel::timestamp,
+        ))
+        .first::<models::RefuelWithOdometer>(&mut conn)
+        .optional()?)
+}
+
+/// Retrieves time-series refueling data for a specific vehicle within a date range.
+///
+/// # Arguments
+/// - `pool`: Database connection pool.
+/// - `vehicle_id`: The ID of the vehicle.
+/// - `start`: The start date/time of the range.
+/// - `end`: The end date/time of the range.
+///
+/// # Returns
+/// - `Ok(Vec<RefuelWithOdometer>)`: A list of refueling entries with odometer details.
+/// - `Err(DbError)`: If the query fails.
+pub fn get_refuel_timeseries(
+    pool: &DbPool,
+    vehicle_id: Uuid,
+    start: NaiveDateTime,
+    end: NaiveDateTime,
+) -> Result<Vec<models::RefuelWithOdometer>, DbError> {
+    use crate::schema::{odometer, refuel};
+
+    let mut conn = pool.get()?;
+    Ok(refuel::table
+        .inner_join(odometer::table)
+        .filter(refuel::vehicle_id.eq(vehicle_id))
+        .filter(refuel::timestamp.between(start, end))
+        .order(refuel::timestamp.asc())
+        .select((
+            refuel::id,
+            refuel::vehicle_id,
+            refuel::odometer_id,
+            refuel::refuel_quantity,
+            odometer::odometer_value,
+            refuel::timestamp,
+        ))
+        .load::<models::RefuelWithOdometer>(&mut conn)?)
 }

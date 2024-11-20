@@ -86,6 +86,12 @@ async fn main() -> std::io::Result<()> {
                     .to(renders::render_home)
                     .wrap(AuthMiddleware::new(pool.clone())),
             )
+            .route(
+                "/refuel",
+                web::get()
+                    .to(renders::render_refuel)
+                    .wrap(AuthMiddleware::new(pool.clone())),
+            )
             .service(
                 web::scope("/api")
                     .service(
@@ -114,6 +120,33 @@ async fn main() -> std::io::Result<()> {
                                     .route(
                                         "/{vehicle_id}",
                                         web::delete().to(handlers::delete_vehicle_by_id),
+                                    ),
+                            )
+                            .service(
+                                web::scope("/odometer")
+                                    .route(
+                                        "/{vehicle_id}",
+                                        web::post().to(handlers::create_odometer),
+                                    )
+                                    .route(
+                                        "/{vehicle_id}/latest",
+                                        web::get().to(handlers::get_latest_odometer),
+                                    )
+                                    .route(
+                                        "/{vehicle_id}/timeseries",
+                                        web::get().to(handlers::get_odometer_timeseries),
+                                    ),
+                            )
+                            .service(
+                                web::scope("/refuel")
+                                    .route("/{vehicle_id}", web::post().to(handlers::create_refuel))
+                                    .route(
+                                        "/{vehicle_id}/latest",
+                                        web::get().to(handlers::get_latest_refuel),
+                                    )
+                                    .route(
+                                        "/{vehicle_id}/timeseries",
+                                        web::get().to(handlers::get_refuel_timeseries),
                                     ),
                             ),
                     ),

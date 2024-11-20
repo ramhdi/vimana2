@@ -1,8 +1,12 @@
 use crate::middleware::AuthenticatedRequest;
 use crate::models::NewVehicle;
-use crate::requests::{LoginRequest, NewUserRequest, NewVehicleRequest, UpdateVehicleRequest};
+use crate::requests::{
+    LoginRequest, NewOdometerRequest, NewRefuelRequest, NewUserRequest, NewVehicleRequest,
+    UpdateVehicleRequest,
+};
 use crate::{services, DbPool};
 use actix_web::{web, Error, HttpRequest, HttpResponse};
+use chrono::NaiveDateTime;
 use uuid::Uuid;
 
 /// Health check handler that verifies server and database connectivity.
@@ -257,6 +261,169 @@ pub async fn delete_vehicle_by_id(
 ) -> Result<HttpResponse, Error> {
     match services::delete_vehicle_by_id(&pool, vehicle_id.into_inner()).await {
         Ok(_) => Ok(HttpResponse::NoContent().finish()),
+        Err(e) => Err(e.into()),
+    }
+}
+
+/// Handler to create a new odometer entry.
+///
+/// This handler wraps the `create_new_odometer` service function.
+///
+/// # Arguments
+/// - `pool`: Database connection pool.
+/// - `vehicle_id`: The ID of the vehicle.
+/// - `odometer_data`: The odometer data from the request.
+///
+/// # Returns
+/// - `201 Created` with the created odometer data.
+/// - Appropriate HTTP error code if the operation fails.
+pub async fn create_odometer(
+    pool: web::Data<DbPool>,
+    vehicle_id: web::Path<Uuid>,
+    odometer_data: web::Json<NewOdometerRequest>,
+) -> Result<HttpResponse, Error> {
+    let odometer_data = odometer_data.into_inner();
+
+    match services::create_new_odometer(
+        &pool,
+        vehicle_id.into_inner(),
+        odometer_data.odometer_value,
+        odometer_data.timestamp,
+    )
+    .await
+    {
+        Ok(odometer) => Ok(HttpResponse::Created().json(odometer)),
+        Err(e) => Err(e.into()),
+    }
+}
+
+/// Handler to get the latest odometer entry for a vehicle.
+///
+/// This handler wraps the `get_latest_odometer` service function.
+///
+/// # Arguments
+/// - `pool`: Database connection pool.
+/// - `vehicle_id`: The ID of the vehicle.
+///
+/// # Returns
+/// - `200 OK` with the latest odometer data.
+/// - Appropriate HTTP error code if the operation fails.
+pub async fn get_latest_odometer(
+    pool: web::Data<DbPool>,
+    vehicle_id: web::Path<Uuid>,
+) -> Result<HttpResponse, Error> {
+    match services::get_latest_odometer(&pool, vehicle_id.into_inner()).await {
+        Ok(odometer) => Ok(HttpResponse::Ok().json(odometer)),
+        Err(e) => Err(e.into()),
+    }
+}
+
+/// Handler to create a new refuel event.
+///
+/// This handler wraps the `create_new_refuel` service function.
+///
+/// # Arguments
+/// - `pool`: Database connection pool.
+/// - `vehicle_id`: The ID of the vehicle.
+/// - `refuel_data`: The refuel data from the request.
+///
+/// # Returns
+/// - `201 Created` with the created refuel data.
+/// - Appropriate HTTP error code if the operation fails.
+pub async fn create_refuel(
+    pool: web::Data<DbPool>,
+    vehicle_id: web::Path<Uuid>,
+    refuel_data: web::Json<NewRefuelRequest>,
+) -> Result<HttpResponse, Error> {
+    let refuel_data = refuel_data.into_inner();
+
+    match services::create_new_refuel(
+        &pool,
+        vehicle_id.into_inner(),
+        refuel_data.refuel_quantity,
+        refuel_data.odometer_value,
+        refuel_data.timestamp,
+    )
+    .await
+    {
+        Ok(refuel) => Ok(HttpResponse::Created().json(refuel)),
+        Err(e) => Err(e.into()),
+    }
+}
+
+/// Handler to get the latest refuel event for a vehicle.
+///
+/// This handler wraps the `get_latest_refuel` service function.
+///
+/// # Arguments
+/// - `pool`: Database connection pool.
+/// - `vehicle_id`: The ID of the vehicle.
+///
+/// # Returns
+/// - `200 OK` with the latest refuel data.
+/// - Appropriate HTTP error code if the operation fails.
+pub async fn get_latest_refuel(
+    pool: web::Data<DbPool>,
+    vehicle_id: web::Path<Uuid>,
+) -> Result<HttpResponse, Error> {
+    match services::get_latest_refuel(&pool, vehicle_id.into_inner()).await {
+        Ok(refuel) => Ok(HttpResponse::Ok().json(refuel)),
+        Err(e) => Err(e.into()),
+    }
+}
+
+/// Handler to get time-series odometer data for a vehicle.
+///
+/// This handler wraps the `get_odometer_timeseries` service function.
+///
+/// # Arguments
+/// - `pool`: Database connection pool.
+/// - `vehicle_id`: The ID of the vehicle.
+/// - `start_date`: Start of the date range.
+/// - `end_date`: End of the date range.
+///
+/// # Returns
+/// - `200 OK` with the time-series odometer data.
+/// - Appropriate HTTP error code if the operation fails.
+pub async fn get_odometer_timeseries(
+    pool: web::Data<DbPool>,
+    vehicle_id: web::Path<Uuid>,
+    query: web::Query<(NaiveDateTime, NaiveDateTime)>,
+) -> Result<HttpResponse, Error> {
+    let (start_date, end_date) = query.into_inner();
+
+    match services::get_odometer_timeseries(&pool, vehicle_id.into_inner(), start_date, end_date)
+        .await
+    {
+        Ok(odometer_data) => Ok(HttpResponse::Ok().json(odometer_data)),
+        Err(e) => Err(e.into()),
+    }
+}
+
+/// Handler to get time-series refuel data for a vehicle.
+///
+/// This handler wraps the `get_refuel_timeseries` service function.
+///
+/// # Arguments
+/// - `pool`: Database connection pool.
+/// - `vehicle_id`: The ID of the vehicle.
+/// - `start_date`: Start of the date range.
+/// - `end_date`: End of the date range.
+///
+/// # Returns
+/// - `200 OK` with the time-series refuel data.
+/// - Appropriate HTTP error code if the operation fails.
+pub async fn get_refuel_timeseries(
+    pool: web::Data<DbPool>,
+    vehicle_id: web::Path<Uuid>,
+    query: web::Query<(NaiveDateTime, NaiveDateTime)>,
+) -> Result<HttpResponse, Error> {
+    let (start_date, end_date) = query.into_inner();
+
+    match services::get_refuel_timeseries(&pool, vehicle_id.into_inner(), start_date, end_date)
+        .await
+    {
+        Ok(refuel_data) => Ok(HttpResponse::Ok().json(refuel_data)),
         Err(e) => Err(e.into()),
     }
 }

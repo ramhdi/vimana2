@@ -68,3 +68,32 @@ pub struct UpdateVehicleRequest {
     /// Updated expiration date for the registration (optional).
     pub registration_expiry_date: Option<NaiveDate>,
 }
+
+/// Represents a request to create a new odometer entry.
+///
+/// This struct is used to parse incoming requests for creating odometer entries, containing:
+/// - `odometer_value`: The odometer reading.
+/// - `timestamp`: Optional timestamp for the entry.
+#[derive(Deserialize)]
+pub struct NewOdometerRequest {
+    /// Odometer reading for the vehicle.
+    pub odometer_value: f32,
+    /// Optional timestamp for the odometer entry.
+    pub timestamp: Option<chrono::NaiveDateTime>,
+}
+
+/// Represents a request to create a new refuel event.
+///
+/// This struct is used to parse incoming requests for creating refuel events, containing:
+/// - `refuel_quantity`: The amount of fuel refueled.
+/// - `odometer_value`: The odometer reading at the time of refueling.
+/// - `timestamp`: Optional timestamp for the refuel event.
+#[derive(Deserialize)]
+pub struct NewRefuelRequest {
+    /// The amount of fuel refueled.
+    pub refuel_quantity: f32,
+    /// The odometer reading at the time of refueling.
+    pub odometer_value: f32,
+    /// Optional timestamp for the refuel event.
+    pub timestamp: Option<chrono::NaiveDateTime>,
+}

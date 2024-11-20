@@ -1,12 +1,12 @@
 use crate::{
-    models::{NewUser, NewVehicle, Session, User, Vehicle},
+    models::{NewSession, NewUser, NewVehicle, Odometer, RefuelWithOdometer, User, Vehicle},
     queries::{self, DbError},
     requests::LoginRequest,
     DbPool,
 };
 use actix_web::http::StatusCode;
 use bcrypt::{hash, verify, DEFAULT_COST};
-use chrono::{Duration, NaiveDate, Utc};
+use chrono::{Duration, NaiveDate, NaiveDateTime, Utc};
 use rand::{distributions::Alphanumeric, Rng};
 use std::fmt;
 use uuid::Uuid;
@@ -105,7 +105,7 @@ pub async fn login(pool: &DbPool, req: &LoginRequest) -> Result<String, ServiceE
 
         queries::create_new_session(
             pool,
-            &Session {
+            &NewSession {
                 id: Uuid::new_v4(),
                 user_id: Some(user.id),
                 session_token: session_token.clone(),
@@ -284,4 +284,138 @@ pub async fn delete_vehicle_by_id(pool: &DbPool, vehicle_id: Uuid) -> Result<(),
         0 => Err(ServiceError::NotFound("Vehicle not found".to_string())),
         _ => Ok(()),
     }
+}
+
+/// Service to create a new odometer entry.
+///
+/// Calls the `create_new_odometer` query to insert a new odometer record.
+///
+/// # Arguments
+/// - `pool`: Database connection pool.
+/// - `vehicle_id`: The ID of the vehicle for which the odometer entry is created.
+/// - `odometer_value`: The odometer reading.
+/// - `timestamp`: Optional timestamp for the odometer entry.
+///
+/// # Returns
+/// - `Ok(Odometer)`: The newly created odometer record.
+/// - `Err(ServiceError)`: If the operation fails.
+pub async fn create_new_odometer(
+    pool: &DbPool,
+    vehicle_id: Uuid,
+    odometer_value: f32,
+    timestamp: Option<NaiveDateTime>,
+) -> Result<Odometer, ServiceError> {
+    queries::create_new_odometer(pool, vehicle_id, odometer_value, timestamp)
+        .map_err(ServiceError::DbError)
+}
+
+/// Service to get the latest odometer entry for a vehicle.
+///
+/// Calls the `get_latest_odometer` query to retrieve the most recent odometer record.
+///
+/// # Arguments
+/// - `pool`: Database connection pool.
+/// - `vehicle_id`: The ID of the vehicle.
+///
+/// # Returns
+/// - `Ok(Odometer)`: The latest odometer record.
+/// - `Err(ServiceError::NotFound)`: If no odometer record exists for the vehicle.
+/// - `Err(ServiceError)`: If the operation fails.
+pub async fn get_latest_odometer(
+    pool: &DbPool,
+    vehicle_id: Uuid,
+) -> Result<Odometer, ServiceError> {
+    queries::get_latest_odometer(pool, vehicle_id)?
+        .ok_or_else(|| ServiceError::NotFound("No odometer record found".to_string()))
+}
+
+/// Service to get odometer time-series data for a vehicle.
+///
+/// Calls the `get_odometer_timeseries` query to retrieve odometer records within a date range.
+///
+/// # Arguments
+/// - `pool`: Database connection pool.
+/// - `vehicle_id`: The ID of the vehicle.
+/// - `start_date`: The start of the date range.
+/// - `end_date`: The end of the date range.
+///
+/// # Returns
+/// - `Ok(Vec<Odometer>)`: A list of odometer records within the specified range.
+/// - `Err(ServiceError)`: If the operation fails.
+pub async fn get_odometer_timeseries(
+    pool: &DbPool,
+    vehicle_id: Uuid,
+    start_date: NaiveDateTime,
+    end_date: NaiveDateTime,
+) -> Result<Vec<Odometer>, ServiceError> {
+    queries::get_odometer_timeseries(pool, vehicle_id, start_date, end_date)
+        .map_err(ServiceError::DbError)
+}
+
+/// Service to create a new refuel event with an associated odometer entry.
+///
+/// Calls the `create_new_refuel` query to insert a refuel record linked to an odometer entry.
+///
+/// # Arguments
+/// - `pool`: Database connection pool.
+/// - `vehicle_id`: The ID of the vehicle.
+/// - `refuel_quantity`: The amount of fuel refueled.
+/// - `odometer_value`: The odometer reading during the refuel.
+/// - `timestamp`: Optional timestamp for the refuel event.
+///
+/// # Returns
+/// - `Ok(RefuelWithOdometer)`: The newly created refuel record along with its odometer entry.
+/// - `Err(ServiceError)`: If the operation fails.
+pub async fn create_new_refuel(
+    pool: &DbPool,
+    vehicle_id: Uuid,
+    refuel_quantity: f32,
+    odometer_value: f32,
+    timestamp: Option<NaiveDateTime>,
+) -> Result<RefuelWithOdometer, ServiceError> {
+    queries::create_new_refuel(pool, vehicle_id, refuel_quantity, odometer_value, timestamp)
+        .map_err(ServiceError::DbError)
+}
+
+/// Service to get the latest refuel event for a vehicle.
+///
+/// Calls the `get_latest_refuel` query to retrieve the most recent refuel record.
+///
+/// # Arguments
+/// - `pool`: Database connection pool.
+/// - `vehicle_id`: The ID of the vehicle.
+///
+/// # Returns
+/// - `Ok(RefuelWithOdometer)`: The latest refuel record.
+/// - `Err(ServiceError::NotFound)`: If no refuel record exists for the vehicle.
+/// - `Err(ServiceError)`: If the operation fails.
+pub async fn get_latest_refuel(
+    pool: &DbPool,
+    vehicle_id: Uuid,
+) -> Result<RefuelWithOdometer, ServiceError> {
+    queries::get_latest_refuel(pool, vehicle_id)?
+        .ok_or_else(|| ServiceError::NotFound("No refuel record found".to_string()))
+}
+
+/// Service to get refuel time-series data for a vehicle.
+///
+/// Calls the `get_refuel_timeseries` query to retrieve refuel records within a date range.
+///
+/// # Arguments
+/// - `pool`: Database connection pool.
+/// - `vehicle_id`: The ID of the vehicle.
+/// - `start_date`: The start of the date range.
+/// - `end_date`: The end of the date range.
+///
+/// # Returns
+/// - `Ok(Vec<RefuelWithOdometer>)`: A list of refuel records within the specified range.
+/// - `Err(ServiceError)`: If the operation fails.
+pub async fn get_refuel_timeseries(
+    pool: &DbPool,
+    vehicle_id: Uuid,
+    start_date: NaiveDateTime,
+    end_date: NaiveDateTime,
+) -> Result<Vec<RefuelWithOdometer>, ServiceError> {
+    queries::get_refuel_timeseries(pool, vehicle_id, start_date, end_date)
+        .map_err(ServiceError::DbError)
 }

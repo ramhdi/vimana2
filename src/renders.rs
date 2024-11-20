@@ -78,3 +78,54 @@ pub async fn render_home(
         }
     }
 }
+
+/// Renders the refuel page where users can record refueling events.
+///
+/// This handler uses the Tera templating engine to render the `refuel.html` template.
+/// A list of vehicles is fetched from the database for the dropdown selection.
+///
+/// # Arguments
+/// * `tera` - Shared instance of the Tera templating engine.
+/// * `base_url` - The base URL for API requests or asset paths.
+/// * `pool` - Database connection pool.
+/// * `req` - The authenticated request to extract the user ID.
+///
+/// # Returns
+/// An `HttpResponse` containing the rendered refuel page.
+pub async fn render_refuel(
+    tera: web::Data<Tera>,
+    base_url: web::Data<String>,
+    pool: web::Data<crate::DbPool>,
+    req: HttpRequest,
+) -> impl Responder {
+    let mut context = Context::new();
+    context.insert("base_url", &base_url.as_str());
+
+    // Get authenticated user ID from request extensions
+    let user_id = match req.authenticated_user_id() {
+        Some(uid) => uid,
+        None => {
+            return HttpResponse::Unauthorized().body("Unauthorized access. Please log in again.");
+        }
+    };
+
+    // Fetch vehicles for the user
+    let vehicles: Vec<Vehicle> = match services::get_vehicles_by_user_id(&pool, user_id).await {
+        Ok(v) => v,
+        Err(e) => {
+            return HttpResponse::InternalServerError()
+                .body(format!("Error fetching vehicles: {}", e));
+        }
+    };
+
+    // Insert vehicles into the context for rendering
+    context.insert("vehicles", &vehicles);
+
+    // Render the refuel page with vehicle data
+    match tera.render("refuel.html", &context) {
+        Ok(rendered) => HttpResponse::Ok().content_type("text/html").body(rendered),
+        Err(e) => {
+            HttpResponse::InternalServerError().body(format!("Error rendering template: {e}"))
+        }
+    }
+}
