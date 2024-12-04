@@ -1,6 +1,7 @@
 use chrono::{NaiveDate, NaiveDateTime};
 use diesel::r2d2::PoolError as R2D2Error;
 use diesel::result::Error as DieselError;
+use diesel::sql_types::{Timestamptz, Uuid as DieselUuid};
 use diesel::{ExpressionMethods, QueryDsl};
 use diesel::{OptionalExtension, RunQueryDsl};
 use std::fmt;
@@ -17,6 +18,7 @@ use crate::{models, schema, DbPool};
 pub enum DbError {
     ConnectionError(R2D2Error),
     QueryError(DieselError),
+    StdError(String),
 }
 
 impl fmt::Display for DbError {
@@ -24,6 +26,7 @@ impl fmt::Display for DbError {
         match self {
             DbError::ConnectionError(e) => write!(f, "Database connection error: {}", e),
             DbError::QueryError(e) => write!(f, "Query execution error: {}", e),
+            DbError::StdError(e) => write!(f, "{}", e),
         }
     }
 }
@@ -186,12 +189,13 @@ pub fn get_vehicles_by_user_id(
     pool: &DbPool,
     user_id_value: Uuid,
 ) -> Result<Vec<models::Vehicle>, DbError> {
-    use crate::schema::vehicles::dsl::*;
+    use crate::schema::vehicles::dsl;
 
     let mut conn = pool.get()?;
 
     Ok(schema::vehicles::table
-        .filter(user_id.eq(user_id_value))
+        .filter(dsl::user_id.eq(user_id_value))
+        .order(dsl::created_at.asc())
         .load::<models::Vehicle>(&mut conn)?)
 }
 
@@ -255,7 +259,7 @@ pub fn update_vehicle_by_id(
         .execute(&mut conn)?;
 
     get_vehicle_by_id(pool, vehicle_id_value)?
-        .ok_or_else(|| DbError::QueryError(diesel::result::Error::NotFound))
+        .ok_or(DbError::QueryError(diesel::result::Error::NotFound))
 }
 
 /// Deletes a vehicle by its ID.
@@ -483,4 +487,58 @@ pub fn get_refuel_timeseries(
             refuel::timestamp,
         ))
         .load::<models::RefuelWithOdometer>(&mut conn)?)
+}
+
+pub fn get_traveled_distance(
+    pool: &DbPool,
+    vehicle_id: Uuid,
+    start_date: NaiveDate,
+    end_date: NaiveDate,
+) -> Result<Option<models::TraveledDistance>, DbError> {
+    use diesel::sql_query;
+
+    let mut conn = pool.get()?;
+
+    let sql = r#"
+        WITH first_reading AS (
+            SELECT odometer_value
+            FROM public.odometer
+            WHERE vehicle_id = $1
+            AND timestamp >= $2::timestamptz
+            AND timestamp < ($3::timestamptz + interval '1 day')
+            ORDER BY timestamp ASC
+            LIMIT 1
+        ),
+        last_reading AS (
+            SELECT odometer_value
+            FROM public.odometer
+            WHERE vehicle_id = $1
+            AND timestamp >= $2::timestamptz
+            AND timestamp < ($3::timestamptz + interval '1 day')
+            ORDER BY timestamp DESC
+            LIMIT 1
+        )
+        SELECT
+            first_reading.odometer_value AS start_value,
+            last_reading.odometer_value AS end_value,
+            last_reading.odometer_value - first_reading.odometer_value AS traveled_distance
+        FROM
+            first_reading,
+            last_reading
+        ;
+    "#;
+
+    let start_date_bind = start_date.and_hms_opt(0, 0, 0).ok_or(DbError::StdError(
+        "Error converting NaiveDate to NaiveDateTime".to_string(),
+    ))?;
+    let end_date_bind = end_date.and_hms_opt(0, 0, 0).ok_or(DbError::StdError(
+        "Error converting NaiveDate to NaiveDateTime".to_string(),
+    ))?;
+
+    Ok(sql_query(sql)
+        .bind::<DieselUuid, _>(vehicle_id)
+        .bind::<Timestamptz, _>(start_date_bind)
+        .bind::<Timestamptz, _>(end_date_bind)
+        .get_result::<models::TraveledDistance>(&mut conn)
+        .optional()?)
 }

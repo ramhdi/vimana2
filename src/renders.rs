@@ -1,5 +1,6 @@
 use actix_web::{web, HttpRequest, HttpResponse, Responder};
 use tera::{Context, Tera};
+use uuid::Uuid;
 
 use crate::middleware::AuthenticatedRequest;
 use crate::models::Vehicle;
@@ -123,6 +124,45 @@ pub async fn render_refuel(
 
     // Render the refuel page with vehicle data
     match tera.render("refuel.html", &context) {
+        Ok(rendered) => HttpResponse::Ok().content_type("text/html").body(rendered),
+        Err(e) => {
+            HttpResponse::InternalServerError().body(format!("Error rendering template: {e}"))
+        }
+    }
+}
+
+pub async fn render_vehicle(
+    tera: web::Data<Tera>,
+    base_url: web::Data<String>,
+    pool: web::Data<crate::DbPool>,
+    req: HttpRequest,
+    vehicle_id: web::Path<Uuid>,
+) -> impl Responder {
+    let mut context = Context::new();
+    context.insert("base_url", &base_url.as_str());
+
+    // Get authenticated user ID from request extensions
+    let _ = match req.authenticated_user_id() {
+        Some(uid) => uid,
+        None => {
+            return HttpResponse::Unauthorized().body("Unauthorized access. Please log in again.");
+        }
+    };
+
+    // Fetch vehicle data for the user
+    let vehicle = match services::get_vehicle_by_id(&pool, *vehicle_id).await {
+        Ok(v) => v,
+        Err(e) => {
+            return HttpResponse::InternalServerError()
+                .body(format!("Error fetching vehicles: {}", e));
+        }
+    };
+
+    // Insert vehicles into the context for rendering
+    context.insert("vehicle", &vehicle);
+
+    // Render the refuel page with vehicle data
+    match tera.render("vehicle.html", &context) {
         Ok(rendered) => HttpResponse::Ok().content_type("text/html").body(rendered),
         Err(e) => {
             HttpResponse::InternalServerError().body(format!("Error rendering template: {e}"))

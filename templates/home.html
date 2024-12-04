@@ -65,14 +65,18 @@
   <div class="container">
     <div class="d-flex justify-content-between align-items-center mt-3">
       <h4>Your Vehicles</h4>
-      <button class="btn btn-primary" data-toggle="modal" data-target="#createVehicleModal">Add Vehicle</button>
+      <button class="btn btn-primary mb-2" data-toggle="modal" data-target="#createVehicleModal">Add Vehicle</button>
     </div>
     <div class="row">
       {% for vehicle in vehicles %}
       <div class="col-md-4">
         <div class="card">
           <div class="card-body">
-            <h5 class="card-title">{{ vehicle.brand }} {{ vehicle.model }}</h5>
+            <h5 class="card-title">
+              <a href="/vehicles/{{ vehicle.id }}" style="color: inherit; text-decoration: none;">
+                {{ vehicle.brand }} {{ vehicle.model }}
+              </a>
+            </h5>
             <p class="card-text">
               Registration: {{ vehicle.registration }}<br>
               Expires: {{ vehicle.registration_expiry_date }}
@@ -99,7 +103,7 @@
           </button>
         </div>
         <div class="modal-body">
-          <form id="createVehicleForm">
+          <form id="createVehicleForm" autocomplete="off">
             <div class="form-group">
               <label for="brand">Brand</label>
               <input type="text" class="form-control" id="brand" required>
@@ -135,7 +139,7 @@
           </button>
         </div>
         <div class="modal-body">
-          <form id="updateVehicleForm">
+          <form id="updateVehicleForm" autocomplete="off">
             <input type="hidden" id="updateVehicleId">
             <div class="form-group">
               <label for="updateBrand">Brand</label>
@@ -204,11 +208,9 @@
     </div>
   </div>
 
-
   <script src="https://code.jquery.com/jquery-3.5.1.slim.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@4.5.2/dist/js/bootstrap.bundle.min.js"></script>
   <script>
-    // Existing JavaScript actions
     function populateUpdateForm(id, brand, model, registration, expiry) {
       document.getElementById("updateVehicleId").value = id;
       document.getElementById("updateBrand").value = brand;
@@ -278,7 +280,6 @@
       else alert("Failed to log out.");
       $("#logoutModal").modal("hide");
     });
-
   </script>
 </body>
 

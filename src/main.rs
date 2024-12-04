@@ -92,6 +92,12 @@ async fn main() -> std::io::Result<()> {
                     .to(renders::render_refuel)
                     .wrap(AuthMiddleware::new(pool.clone())),
             )
+            .route(
+                "/vehicles/{vehicle_id}",
+                web::get()
+                    .to(renders::render_vehicle)
+                    .wrap(AuthMiddleware::new(pool.clone())),
+            )
             .service(
                 web::scope("/api")
                     .service(
@@ -135,6 +141,10 @@ async fn main() -> std::io::Result<()> {
                                     .route(
                                         "/{vehicle_id}/timeseries",
                                         web::get().to(handlers::get_odometer_timeseries),
+                                    )
+                                    .route(
+                                        "/{vehicle_id}/traveled",
+                                        web::get().to(handlers::get_traveled_distance),
                                     ),
                             )
                             .service(

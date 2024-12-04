@@ -1,5 +1,8 @@
 use crate::{
-    models::{NewSession, NewUser, NewVehicle, Odometer, RefuelWithOdometer, User, Vehicle},
+    models::{
+        NewSession, NewUser, NewVehicle, Odometer, RefuelWithOdometer, TraveledDistance, User,
+        Vehicle,
+    },
     queries::{self, DbError},
     requests::LoginRequest,
     DbPool,
@@ -417,5 +420,15 @@ pub async fn get_refuel_timeseries(
     end_date: NaiveDateTime,
 ) -> Result<Vec<RefuelWithOdometer>, ServiceError> {
     queries::get_refuel_timeseries(pool, vehicle_id, start_date, end_date)
+        .map_err(ServiceError::DbError)
+}
+
+pub async fn get_traveled_distance(
+    pool: &DbPool,
+    vehicle_id: Uuid,
+    start_date: NaiveDate,
+    end_date: NaiveDate,
+) -> Result<Option<TraveledDistance>, ServiceError> {
+    queries::get_traveled_distance(pool, vehicle_id, start_date, end_date)
         .map_err(ServiceError::DbError)
 }

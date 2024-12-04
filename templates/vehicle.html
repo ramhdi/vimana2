@@ -1,0 +1,556 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Vehicle Details</title>
+  <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
+  <style>
+    body {
+      background-color: #f8f9fa;
+    }
+
+    .card {
+      box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+      margin-bottom: 1rem;
+    }
+
+    .navbar-toggler {
+      border: none;
+    }
+
+    .navbar-toggler-icon {
+      background-color: #333;
+      width: 30px;
+      height: 3px;
+      margin: 5px 0;
+    }
+
+    .modal {
+      z-index: 1050;
+    }
+
+    .loading-spinner {
+      display: none;
+    }
+
+    .table-responsive {
+      max-height: 300px;
+      overflow-y: auto;
+    }
+
+    /* Ensure labels are bold */
+    .detail-key {
+      font-weight: bold;
+    }
+
+    /* Adjust spacing between key and value */
+    .detail-item {
+      margin-bottom: 1rem;
+    }
+  </style>
+</head>
+
+<body>
+  <!-- Navbar -->
+  <nav class="navbar navbar-expand-md navbar-light bg-light shadow">
+    <div class="container">
+      <a class="navbar-brand font-weight-bold h4" href="{{ base_url | safe }}/home">Vimana</a>
+      <button class="navbar-toggler" type="button" data-toggle="collapse" data-target="#navbarNav"
+        aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
+        <span class="navbar-toggler-icon"></span>
+      </button>
+      <div class="collapse navbar-collapse" id="navbarNav">
+        <ul class="navbar-nav ml-auto">
+          <li class="nav-item">
+            <a class="nav-link" href="{{ base_url | safe }}/home">Vehicles</a>
+          </li>
+          <li class="nav-item">
+            <a class="nav-link" href="#">Maintenances</a>
+          </li>
+          <li class="nav-item">
+            <a class="nav-link" href="{{ base_url | safe }}/refuel">Refuel</a>
+          </li>
+          <li class="nav-item">
+            <button class="btn btn-danger btn-sm nav-link" style="color: white !important;"
+              id="logoutButton">Logout</button>
+          </li>
+        </ul>
+      </div>
+    </div>
+  </nav>
+
+  <div class="container my-4">
+    <div class="row">
+      <!-- Vehicle Details -->
+      <div class="col-lg-4 col-md-12">
+        <div class="card">
+          <div class="card-header d-flex justify-content-between align-items-center">
+            <h5>Vehicle Details</h5>
+            <div>
+              <button class="btn btn-warning btn-sm" data-toggle="modal" data-target="#updateVehicleModal"
+                onclick="populateUpdateForm('{{ vehicle.id }}', '{{ vehicle.brand }}', '{{ vehicle.model }}', '{{ vehicle.registration }}', '{{ vehicle.registration_expiry_date }}')">Edit</button>
+              <button class="btn btn-danger btn-sm" onclick="deleteVehicle('{{ vehicle.id }}')">Delete</button>
+            </div>
+          </div>
+          <div class="card-body">
+            <div class="detail-item">
+              <p class="detail-key">ID:</p>
+              <p>{{ vehicle.id }}</p>
+            </div>
+            <div class="detail-item">
+              <p class="detail-key">Brand:</p>
+              <p>{{ vehicle.brand }}</p>
+            </div>
+            <div class="detail-item">
+              <p class="detail-key">Model:</p>
+              <p>{{ vehicle.model }}</p>
+            </div>
+            <div class="detail-item">
+              <p class="detail-key">Registration:</p>
+              <p>{{ vehicle.registration }}</p>
+            </div>
+            <div class="detail-item">
+              <p class="detail-key">Registration Expiry Date:</p>
+              <p>{{ vehicle.registration_expiry_date }}</p>
+            </div>
+            <div class="detail-item">
+              <p class="detail-key">Created At:</p>
+              <p>{{ vehicle.created_at }}</p>
+            </div>
+            <div class="detail-item">
+              <p class="detail-key">Updated At:</p>
+              <p>{{ vehicle.updated_at }}</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Vehicle Usage & Performance Analysis -->
+      <div class="col-lg-8 col-md-12">
+        <div class="card">
+          <div class="card-header">
+            <h5>Usage & Performance Analysis</h5>
+          </div>
+          <div class="card-body">
+            <!-- Date Range Selection -->
+            <div class="form-row align-items-center mb-3">
+              <div class="col-sm-12 col-md-4 mb-2">
+                <label for="dateRange" class="sr-only"><strong>Select Date Range:</strong></label>
+                <select class="form-control" id="dateRange">
+                  <option value="1d">Last One Day</option>
+                  <option value="7d">Last 7 Days</option>
+                  <option value="30d">Last 30 Days</option>
+                  <option value="ytd">Year to Date</option>
+                  <option value="custom">Custom Range</option>
+                </select>
+              </div>
+              <div class="col-sm-6 col-md-3 mb-2">
+                <input type="date" class="form-control" id="startDate" placeholder="Start Date" disabled>
+              </div>
+              <div class="col-sm-6 col-md-3 mb-2">
+                <input type="date" class="form-control" id="endDate" placeholder="End Date" disabled>
+              </div>
+              <div class="col-sm-12 col-md-2 mb-2">
+                <button class="btn btn-primary btn-block" id="fetchDataButton">
+                  <span class="spinner-border spinner-border-sm loading-spinner" role="status"
+                    aria-hidden="true"></span>
+                  Fetch
+                </button>
+              </div>
+            </div>
+
+            <!-- Analysis Results -->
+            <div id="analysisResults">
+              <div class="row">
+                <div class="col-md-6 mb-3">
+                  <div class="card">
+                    <div class="card-body">
+                      <h5 class="card-title">Traveled Distance</h5>
+                      <p class="card-text" id="traveledDistance">-</p>
+                    </div>
+                  </div>
+                </div>
+                <div class="col-md-6 mb-3">
+                  <div class="card">
+                    <div class="card-body">
+                      <h5 class="card-title">Average Fuel Economy</h5>
+                      <p class="card-text" id="fuelEconomy">-</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Refuel History -->
+              <div class="mb-4">
+                <h5>Refuel History</h5>
+                <div class="table-responsive">
+                  <table class="table table-striped">
+                    <thead>
+                      <tr>
+                        <th>Date</th>
+                        <th>Amount (Liters)</th>
+                        <th>Cost</th>
+                      </tr>
+                    </thead>
+                    <tbody id="refuelHistory">
+                      <!-- To be implemented -->
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              <!-- Maintenance History -->
+              <div class="mb-4">
+                <h5>Maintenance History</h5>
+                <div class="table-responsive">
+                  <table class="table table-striped">
+                    <thead>
+                      <tr>
+                        <th>Date</th>
+                        <th>Description</th>
+                        <th>Cost</th>
+                      </tr>
+                    </thead>
+                    <tbody id="maintenanceHistory">
+                      <!-- To be implemented -->
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Update Vehicle Modal -->
+    <div class="modal fade" id="updateVehicleModal" tabindex="-1" role="dialog"
+      aria-labelledby="updateVehicleModalLabel" aria-hidden="true">
+      <div class="modal-dialog" role="document">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h5 class="modal-title" id="updateVehicleModalLabel">Update Vehicle</h5>
+            <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+              <span aria-hidden="true">&times;</span>
+            </button>
+          </div>
+          <div class="modal-body">
+            <form id="updateVehicleForm" autocomplete="off">
+              <input type="hidden" id="updateVehicleId">
+              <div class="form-group">
+                <label for="updateBrand">Brand</label>
+                <input type="text" class="form-control" id="updateBrand" required>
+              </div>
+              <div class="form-group">
+                <label for="updateModel">Model</label>
+                <input type="text" class="form-control" id="updateModel" required>
+              </div>
+              <div class="form-group">
+                <label for="updateRegistration">Registration</label>
+                <input type="text" class="form-control" id="updateRegistration" required>
+              </div>
+              <div class="form-group">
+                <label for="updateRegistrationExpiry">Registration Expiry Date</label>
+                <input type="date" class="form-control" id="updateRegistrationExpiry" required>
+              </div>
+              <button type="submit" class="btn btn-primary btn-block">
+                <span class="spinner-border spinner-border-sm loading-spinner" role="status" aria-hidden="true"></span>
+                Update Vehicle
+              </button>
+            </form>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Delete Vehicle Confirmation Modal -->
+    <div class="modal fade" id="deleteVehicleModal" tabindex="-1" role="dialog"
+      aria-labelledby="deleteVehicleModalLabel" aria-hidden="true">
+      <div class="modal-dialog" role="document">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h5 class="modal-title" id="deleteVehicleModalLabel">Confirm Deletion</h5>
+            <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+              <span aria-hidden="true">&times;</span>
+            </button>
+          </div>
+          <div class="modal-body">
+            Are you sure you want to delete this vehicle?
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
+            <button type="button" class="btn btn-danger" id="confirmDeleteVehicleButton">
+              <span class="spinner-border spinner-border-sm loading-spinner" role="status" aria-hidden="true"></span>
+              Delete
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Logout Confirmation Modal -->
+    <div class="modal fade" id="logoutModal" tabindex="-1" role="dialog" aria-labelledby="logoutModalLabel"
+      aria-hidden="true">
+      <div class="modal-dialog" role="document">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h5 class="modal-title" id="logoutModalLabel">Confirm Logout</h5>
+            <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+              <span aria-hidden="true">&times;</span>
+            </button>
+          </div>
+          <div class="modal-body">
+            Are you sure you want to log out?
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
+            <button type="button" class="btn btn-danger" id="confirmLogoutButton">
+              <span class="spinner-border spinner-border-sm loading-spinner" role="status" aria-hidden="true"></span>
+              Logout
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Scripts -->
+    <script src="https://code.jquery.com/jquery-3.5.1.slim.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@4.5.2/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+      // Populate Update Form
+      function populateUpdateForm(id, brand, model, registration, expiry) {
+        document.getElementById("updateVehicleId").value = id;
+        document.getElementById("updateBrand").value = brand;
+        document.getElementById("updateModel").value = model;
+        document.getElementById("updateRegistration").value = registration;
+        document.getElementById("updateRegistrationExpiry").value = expiry;
+      }
+
+      // Update Vehicle Form Submission
+      document.getElementById("updateVehicleForm").addEventListener("submit", async function (e) {
+        e.preventDefault();
+        const button = this.querySelector("button");
+        const spinner = button.querySelector(".loading-spinner");
+        spinner.style.display = "inline-block";
+        button.disabled = true;
+
+        const id = document.getElementById("updateVehicleId").value;
+        const data = {
+          brand: document.getElementById("updateBrand").value,
+          model: document.getElementById("updateModel").value,
+          registration: document.getElementById("updateRegistration").value,
+          registration_expiry_date: document.getElementById("updateRegistrationExpiry").value,
+        };
+        try {
+          const response = await fetch("{{ base_url | safe }}/api/protected/vehicles/" + id, {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(data),
+          });
+          if (response.ok) {
+            location.reload();
+          } else {
+            alert("Failed to update vehicle.");
+          }
+        } catch (error) {
+          alert("An error occurred.");
+        } finally {
+          spinner.style.display = "none";
+          button.disabled = false;
+        }
+      });
+
+      // Delete Vehicle Function
+      function deleteVehicle(id) {
+        document.getElementById("confirmDeleteVehicleButton").onclick = async function () {
+          const button = this;
+          const spinner = button.querySelector(".spinner-border");
+          spinner.style.display = "inline-block";
+          button.disabled = true;
+
+          try {
+            const response = await fetch("{{ base_url | safe }}/api/protected/vehicles/" + id, {
+              method: "DELETE",
+            });
+            if (response.ok) {
+              location.reload();
+            } else {
+              alert("Failed to delete vehicle.");
+            }
+          } catch (error) {
+            alert("An error occurred.");
+          } finally {
+            spinner.style.display = "none";
+            button.disabled = false;
+            $("#deleteVehicleModal").modal("hide");
+          }
+        };
+        $("#deleteVehicleModal").modal("show");
+      }
+
+      // Create Vehicle Form Submission (if needed)
+      // You can remove this if not needed on this page
+      document.getElementById("createVehicleForm")?.addEventListener("submit", async function (e) {
+        e.preventDefault();
+        const data = {
+          brand: document.getElementById("brand").value,
+          model: document.getElementById("model").value,
+          registration: document.getElementById("registration").value,
+          registration_expiry_date: document.getElementById("registrationExpiry").value,
+        };
+        const response = await fetch("{{ base_url | safe }}/api/protected/vehicles/", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(data),
+        });
+        if (response.ok) location.reload();
+        else alert("Failed to add vehicle.");
+      });
+
+      // Logout Button
+      document.getElementById("logoutButton").addEventListener("click", function () {
+        $("#logoutModal").modal("show");
+      });
+
+      document.getElementById("confirmLogoutButton").addEventListener("click", async function () {
+        const button = this;
+        const spinner = button.querySelector(".spinner-border");
+        spinner.style.display = "inline-block";
+        button.disabled = true;
+
+        try {
+          const response = await fetch("{{ base_url | safe }}/api/protected/logout", {
+            method: "POST",
+            credentials: "same-origin",
+          });
+          if (response.ok) {
+            window.location.href = "{{ base_url | safe }}/";
+          } else {
+            alert("Failed to log out.");
+          }
+        } catch (error) {
+          alert("An error occurred.");
+        } finally {
+          spinner.style.display = "none";
+          button.disabled = false;
+          $("#logoutModal").modal("hide");
+        }
+      });
+
+      // Date Range Selection Logic
+      document.getElementById("dateRange").addEventListener("change", function () {
+        const custom = this.value === "custom";
+        document.getElementById("startDate").disabled = !custom;
+        document.getElementById("endDate").disabled = !custom;
+
+        if (!custom) {
+          computeAndSetDates(this.value);
+        }
+      });
+
+      // Compute and Set Dates based on range
+      function computeAndSetDates(range) {
+        let startDate, endDate;
+        const today = new Date();
+        const localDate = today.toLocaleDateString('en-CA');
+
+        switch (range) {
+          case "1d":
+            endDate = localDate;
+            startDate = endDate;
+            break;
+          case "7d":
+            startDate = new Date(today.getTime() - (6 * 24 * 60 * 60 * 1000));
+            endDate = localDate;
+            startDate = startDate.toLocaleDateString('en-CA');
+            break;
+          case "30d":
+            startDate = new Date(today.getTime() - (29 * 24 * 60 * 60 * 1000));
+            endDate = localDate;
+            startDate = startDate.toLocaleDateString('en-CA');
+            break;
+          case "ytd":
+            startDate = new Date(today.getFullYear(), 0, 1);
+            endDate = localDate;
+            startDate = startDate.toLocaleDateString('en-CA');
+            break;
+          default:
+            startDate = "";
+            endDate = "";
+        }
+
+        document.getElementById("startDate").value = startDate;
+        document.getElementById("endDate").value = endDate;
+      }
+
+
+      // Fetch Data Button
+      document.getElementById("fetchDataButton").addEventListener("click", async function () {
+        const button = this;
+        const spinner = button.querySelector(".loading-spinner");
+        spinner.style.display = "inline-block";
+        button.disabled = true;
+
+        let startDate, endDate;
+        const range = document.getElementById("dateRange").value;
+        const custom = range === "custom";
+
+        if (custom) {
+          startDate = document.getElementById("startDate").value;
+          endDate = document.getElementById("endDate").value;
+          if (!startDate || !endDate) {
+            alert("Please select both start and end dates.");
+            spinner.style.display = "none";
+            button.disabled = false;
+            return;
+          }
+          if (new Date(startDate) > new Date(endDate)) {
+            alert("Start date cannot be after end date.");
+            spinner.style.display = "none";
+            button.disabled = false;
+            return;
+          }
+        } else {
+          startDate = document.getElementById("startDate").value;
+          endDate = document.getElementById("endDate").value;
+          if (!startDate || !endDate) {
+            alert("Invalid date range selected.");
+            spinner.style.display = "none";
+            button.disabled = false;
+            return;
+          }
+        }
+
+        try {
+          // Fetch Traveled Distance
+          const traveledResponse = await fetch(`{{ base_url | safe }}/api/protected/odometer/{{ vehicle.id }}/traveled?start_date=${startDate}&end_date=${endDate}`, {
+            method: "GET",
+            headers: { "Content-Type": "application/json" },
+            credentials: "same-origin", // Include credentials if required
+          });
+
+          if (traveledResponse.ok) {
+            const traveledData = await traveledResponse.json();
+            document.getElementById("traveledDistance").textContent = traveledData?.traveled_distance || "N/A";
+          } else {
+            alert("Failed to fetch traveled distance.");
+            document.getElementById("traveledDistance").textContent = "Error fetching data.";
+          }
+        } catch (error) {
+          console.error("Error fetching data:", error);
+          alert("An error occurred while fetching data.");
+        } finally {
+          spinner.style.display = "none";
+          button.disabled = false;
+        }
+      });
+
+      window.addEventListener('DOMContentLoaded', (event) => {
+        computeAndSetDates(document.getElementById("dateRange").value);
+      });
+    </script>
+</body>
+
+</html>

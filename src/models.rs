@@ -1,6 +1,7 @@
 use crate::schema::*;
 use chrono::NaiveDateTime;
-use diesel::{prelude::Identifiable, Insertable, Queryable, Selectable};
+use diesel::sql_types::Float4;
+use diesel::{prelude::Identifiable, Insertable, Queryable, QueryableByName, Selectable};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
@@ -215,4 +216,14 @@ pub struct RefuelWithOdometer {
     pub refuel_quantity: f32,
     pub odometer_value: f32,
     pub timestamp: Option<NaiveDateTime>,
+}
+
+#[derive(Debug, QueryableByName, Serialize)]
+pub struct TraveledDistance {
+    #[diesel(sql_type = Float4)]
+    start_value: f32,
+    #[diesel(sql_type = Float4)]
+    end_value: f32,
+    #[diesel(sql_type = Float4)]
+    traveled_distance: f32,
 }

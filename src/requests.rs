@@ -97,3 +97,9 @@ pub struct NewRefuelRequest {
     /// Optional timestamp for the refuel event.
     pub timestamp: Option<chrono::NaiveDateTime>,
 }
+
+#[derive(Deserialize)]
+pub struct DateIntervalRequest {
+    pub start_date: chrono::NaiveDate,
+    pub end_date: chrono::NaiveDate,
+}

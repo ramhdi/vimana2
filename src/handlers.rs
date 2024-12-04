@@ -1,8 +1,8 @@
 use crate::middleware::AuthenticatedRequest;
 use crate::models::NewVehicle;
 use crate::requests::{
-    LoginRequest, NewOdometerRequest, NewRefuelRequest, NewUserRequest, NewVehicleRequest,
-    UpdateVehicleRequest,
+    DateIntervalRequest, LoginRequest, NewOdometerRequest, NewRefuelRequest, NewUserRequest,
+    NewVehicleRequest, UpdateVehicleRequest,
 };
 use crate::{services, DbPool};
 use actix_web::{web, Error, HttpRequest, HttpResponse};
@@ -422,6 +422,26 @@ pub async fn get_refuel_timeseries(
 
     match services::get_refuel_timeseries(&pool, vehicle_id.into_inner(), start_date, end_date)
         .await
+    {
+        Ok(refuel_data) => Ok(HttpResponse::Ok().json(refuel_data)),
+        Err(e) => Err(e.into()),
+    }
+}
+
+pub async fn get_traveled_distance(
+    pool: web::Data<DbPool>,
+    vehicle_id: web::Path<Uuid>,
+    query: web::Query<DateIntervalRequest>,
+) -> Result<HttpResponse, Error> {
+    let request = query.into_inner();
+
+    match services::get_traveled_distance(
+        &pool,
+        vehicle_id.into_inner(),
+        request.start_date,
+        request.end_date,
+    )
+    .await
     {
         Ok(refuel_data) => Ok(HttpResponse::Ok().json(refuel_data)),
         Err(e) => Err(e.into()),
