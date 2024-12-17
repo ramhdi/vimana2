@@ -79,25 +79,25 @@ async fn main() -> std::io::Result<()> {
                     .allow_any_method()
                     .allow_any_header(),
             )
-            .route("/", web::get().to(renders::render_login))
-            .route(
-                "/home",
-                web::get()
-                    .to(renders::render_home)
-                    .wrap(AuthMiddleware::new(pool.clone())),
-            )
-            .route(
-                "/refuel",
-                web::get()
-                    .to(renders::render_refuel)
-                    .wrap(AuthMiddleware::new(pool.clone())),
-            )
-            .route(
-                "/vehicles/{vehicle_id}",
-                web::get()
-                    .to(renders::render_vehicle)
-                    .wrap(AuthMiddleware::new(pool.clone())),
-            )
+            // .route("/", web::get().to(renders::render_login))
+            // .route(
+            //     "/home",
+            //     web::get()
+            //         .to(renders::render_home)
+            //         .wrap(AuthMiddleware::new(pool.clone())),
+            // )
+            // .route(
+            //     "/refuel",
+            //     web::get()
+            //         .to(renders::render_refuel)
+            //         .wrap(AuthMiddleware::new(pool.clone())),
+            // )
+            // .route(
+            //     "/vehicles/{vehicle_id}",
+            //     web::get()
+            //         .to(renders::render_vehicle)
+            //         .wrap(AuthMiddleware::new(pool.clone())),
+            // )
             .service(
                 web::scope("/api")
                     .service(
@@ -161,7 +161,8 @@ async fn main() -> std::io::Result<()> {
                             ),
                     ),
             )
-            .service(fs::Files::new("/static", "./static").show_files_listing())
+            // .service(fs::Files::new("/static", "./static").show_files_listing())
+            .service(fs::Files::new("/", "./frontend/build/client").index_file("index.html"))
     })
     .bind(("0.0.0.0", 8081))?
     .run()
