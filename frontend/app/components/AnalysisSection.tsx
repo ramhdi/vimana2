@@ -1,11 +1,16 @@
 import { useState, useEffect } from "react";
 import { Input } from "~/components/ui/input";
 import { Button } from "~/components/ui/button";
+import { vehicleService } from "~/services/vehicleService";
 
-export function AnalysisSection() {
+export function AnalysisSection({ vehicleId }: { vehicleId: string }) {
   const [dateRange, setDateRange] = useState("7d");
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
+  const [traveledDistance, setTraveledDistance] = useState<string | number>("N/A");
+  const [fuelEconomy, setFuelEconomy] = useState<string | number>("N/A");
+  const [refuelHistory, setRefuelHistory] = useState<any[]>([]);
+  const [maintenanceHistory, setMaintenanceHistory] = useState<any[]>([]);
 
   // Compute start and end dates based on range
   useEffect(() => {
@@ -44,9 +49,25 @@ export function AnalysisSection() {
     setEndDate(formatDate(end));
   };
 
-
   const formatDate = (date: Date): string => {
     return date.toISOString().split("T")[0]; // Format as YYYY-MM-DD
+  };
+
+  const fetchAnalysis = async () => {
+    try {
+      const analysis = await vehicleService.fetchVehicleAnalysis(vehicleId, startDate, endDate);
+      setTraveledDistance(analysis.traveled_distance || "N/A");
+      setFuelEconomy(analysis.fuel_economy || "N/A");
+
+      const refuel = await vehicleService.fetchRefuelHistory(vehicleId, startDate, endDate);
+      setRefuelHistory(refuel || []);
+
+      const maintenance = await vehicleService.fetchMaintenanceHistory(vehicleId, startDate, endDate);
+      setMaintenanceHistory(maintenance || []);
+    } catch (error) {
+      console.error("Error fetching analysis:", error);
+      alert("Failed to fetch analysis data.");
+    }
   };
 
   return (
@@ -82,18 +103,18 @@ export function AnalysisSection() {
           onChange={(e) => setEndDate(e.target.value)}
           disabled={dateRange !== "custom"}
         />
-        <Button>Fetch</Button>
+        <Button onClick={fetchAnalysis}>Fetch</Button>
       </div>
 
       {/* Performance Metrics */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div className="p-4 bg-gray-50 rounded shadow">
           <h6 className="font-medium text-gray-600">Traveled Distance</h6>
-          <p className="text-lg font-semibold text-gray-800">N/A</p>
+          <p className="text-lg font-semibold text-gray-800">{traveledDistance}</p>
         </div>
         <div className="p-4 bg-gray-50 rounded shadow">
           <h6 className="font-medium text-gray-600">Average Fuel Economy</h6>
-          <p className="text-lg font-semibold text-gray-800">N/A</p>
+          <p className="text-lg font-semibold text-gray-800">{fuelEconomy}</p>
         </div>
       </div>
 
@@ -109,11 +130,21 @@ export function AnalysisSection() {
             </tr>
           </thead>
           <tbody>
-            <tr>
-              <td className="py-2 px-4">2023-12-01</td>
-              <td className="py-2 px-4">50</td>
-              <td className="py-2 px-4">$75</td>
-            </tr>
+            {refuelHistory.length > 0 ? (
+              refuelHistory.map((entry, index) => (
+                <tr key={index}>
+                  <td className="py-2 px-4">{entry.date}</td>
+                  <td className="py-2 px-4">{entry.amount}</td>
+                  <td className="py-2 px-4">{entry.cost}</td>
+                </tr>
+              ))
+            ) : (
+              <tr>
+                <td className="py-2 px-4 text-center" colSpan={3}>
+                  No data available
+                </td>
+              </tr>
+            )}
           </tbody>
         </table>
       </div>
@@ -130,11 +161,21 @@ export function AnalysisSection() {
             </tr>
           </thead>
           <tbody>
-            <tr>
-              <td className="py-2 px-4">2023-10-15</td>
-              <td className="py-2 px-4">Oil Change</td>
-              <td className="py-2 px-4">$50</td>
-            </tr>
+            {maintenanceHistory.length > 0 ? (
+              maintenanceHistory.map((entry, index) => (
+                <tr key={index}>
+                  <td className="py-2 px-4">{entry.date}</td>
+                  <td className="py-2 px-4">{entry.description}</td>
+                  <td className="py-2 px-4">{entry.cost}</td>
+                </tr>
+              ))
+            ) : (
+              <tr>
+                <td className="py-2 px-4 text-center" colSpan={3}>
+                  No data available
+                </td>
+              </tr>
+            )}
           </tbody>
         </table>
       </div>

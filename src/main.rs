@@ -77,7 +77,8 @@ async fn main() -> std::io::Result<()> {
                 Cors::default()
                     .allow_any_origin()
                     .allow_any_method()
-                    .allow_any_header(),
+                    .allow_any_header()
+                    .supports_credentials(),
             )
             .route("/", web::get().to(renders::render_login))
             .route(

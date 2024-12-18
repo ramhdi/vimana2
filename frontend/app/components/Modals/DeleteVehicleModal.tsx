@@ -1,23 +1,15 @@
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "~/components/ui/dialog";
 import { Button } from "~/components/ui/button";
+import { Vehicle } from "~/types/vehicle";
 
 interface DeleteVehicleModalProps {
   isOpen: boolean;
   onClose: () => void;
   onConfirm: () => void;
-  vehicle: {
-    id: string;
-    brand: string;
-    model: string;
-  } | null;
+  vehicle: Vehicle | null;
 }
 
-export function DeleteVehicleModal({
-  isOpen,
-  onClose,
-  onConfirm,
-  vehicle,
-}: DeleteVehicleModalProps) {
+export function DeleteVehicleModal({ isOpen, onClose, onConfirm, vehicle }: DeleteVehicleModalProps) {
   if (!isOpen || !vehicle) return null;
 
   return (

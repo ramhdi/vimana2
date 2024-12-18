@@ -1,12 +1,8 @@
 import { Link } from "@remix-run/react";
 import { Button } from "~/components/ui/button";
+import { Vehicle } from "~/types/vehicle";
 
-interface VehicleCardProps {
-  id: string;
-  brand: string;
-  model: string;
-  registration: string;
-  registrationExpiry: string;
+interface VehicleCardProps extends Vehicle {
   onEdit: () => void;
   onDelete: () => void;
 }
@@ -16,7 +12,7 @@ export function VehicleCard({
   brand,
   model,
   registration,
-  registrationExpiry,
+  registration_expiry_date,
   onEdit,
   onDelete,
 }: VehicleCardProps) {
@@ -30,7 +26,7 @@ export function VehicleCard({
       <p className="text-sm text-gray-500 mt-2">
         Registration: <span className="font-medium">{registration}</span>
         <br />
-        Expires: <span className="font-medium">{registrationExpiry}</span>
+        Expires: <span className="font-medium">{registration_expiry_date}</span>
       </p>
       <div className="flex items-center space-x-4 mt-4">
         <Button variant="secondary" onClick={onEdit}>
@@ -40,6 +36,6 @@ export function VehicleCard({
           Delete
         </Button>
       </div>
-    </div >
+    </div>
   );
 }

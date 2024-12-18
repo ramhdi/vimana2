@@ -2,6 +2,7 @@ import { Link, useNavigate } from "@remix-run/react";
 import { useState } from "react";
 import { Button } from "~/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "~/components/ui/dialog";
+import { BASE_URL } from "~/config";
 
 export function Navbar() {
   const [isLogoutModalOpen, setIsLogoutModalOpen] = useState(false);
@@ -9,13 +10,13 @@ export function Navbar() {
 
   const handleLogout = async () => {
     try {
-      const response = await fetch("/api/protected/logout", {
+      const response = await fetch(`${BASE_URL}/api/protected/logout`, {
         method: "POST",
-        credentials: "same-origin",
+        credentials: "include",
       });
 
       if (response.ok) {
-        navigate("/");
+        navigate("/login");
       } else {
         alert("Failed to log out. Please try again.");
       }

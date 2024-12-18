@@ -11,13 +11,12 @@ import {
 import { Input } from "~/components/ui/input";
 import { Label } from "~/components/ui/label";
 import { useNavigate } from "@remix-run/react";
-import { useBaseUrl } from "~/hooks/useBaseUrl";
+import { BASE_URL } from "~/config";
 
 export function LoginForm({
   className,
   ...props
 }: React.ComponentPropsWithoutRef<"div">) {
-  const baseUrl = useBaseUrl();
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
@@ -28,31 +27,32 @@ export function LoginForm({
     setErrorMessage("");
     navigate("/home");
 
-    // try {
-    //   const response = await fetch(`${baseUrl}/api/public/login`, {
-    //     method: "POST",
-    //     headers: {
-    //       "Content-Type": "application/json",
-    //     },
-    //     body: JSON.stringify({ username: username, password }),
-    //   });
+    try {
 
-    //   if (response.ok) {
-    //     // Redirect to /home if login is successful
-    //     navigate("/home");
-    //   } else {
-    //     const errorData = await response.json().catch(() => ({}));
-    //     if (response.status === 401) {
-    //       setErrorMessage("Unauthorized: Invalid username or password.");
-    //     } else if (response.status === 422) {
-    //       setErrorMessage("Validation Error: " + (errorData.error || "Invalid input."));
-    //     } else {
-    //       setErrorMessage("An unexpected error occurred. Please try again.");
-    //     }
-    //   }
-    // } catch (error) {
-    //   setErrorMessage("A network error occurred. Please try again later.");
-    // }
+      const response = await fetch(`${BASE_URL}/api/public/login`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ username: username, password }),
+        credentials: "include",
+      });
+
+      if (response.ok) {
+        navigate("/home");
+      } else {
+        const errorData = await response.json().catch(() => ({}));
+        if (response.status === 401) {
+          setErrorMessage("Unauthorized: Invalid username or password.");
+        } else if (response.status === 422) {
+          setErrorMessage("Validation Error: " + (errorData.error || "Invalid input."));
+        } else {
+          setErrorMessage("An unexpected error occurred. Please try again.");
+        }
+      }
+    } catch (error) {
+      setErrorMessage("A network error occurred. Please try again later.");
+    }
   };
 
   return (
