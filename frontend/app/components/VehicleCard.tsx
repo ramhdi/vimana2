@@ -1,3 +1,4 @@
+import { Link } from "@remix-run/react";
 import { Button } from "~/components/ui/button";
 
 interface VehicleCardProps {
@@ -11,7 +12,7 @@ interface VehicleCardProps {
 }
 
 export function VehicleCard({
-  // id,
+  id,
   brand,
   model,
   registration,
@@ -21,9 +22,11 @@ export function VehicleCard({
 }: VehicleCardProps) {
   return (
     <div className="bg-white shadow-md rounded-lg p-6 flex flex-col justify-between hover:shadow-lg transition-shadow">
-      <h3 className="text-lg font-semibold text-gray-800">
-        {brand} {model}
-      </h3>
+      <Link to={`/vehicle/${id}`}>
+        <h3 className="text-lg font-semibold text-gray-800">
+          {brand} {model}
+        </h3>
+      </Link>
       <p className="text-sm text-gray-500 mt-2">
         Registration: <span className="font-medium">{registration}</span>
         <br />
@@ -37,6 +40,6 @@ export function VehicleCard({
           Delete
         </Button>
       </div>
-    </div>
+    </div >
   );
 }
