@@ -1,74 +1,31 @@
 use actix_web::{
     dev::{forward_ready, Service, ServiceRequest, ServiceResponse, Transform},
     error::ErrorUnauthorized,
+    http::header,
     Error, HttpMessage, HttpRequest,
 };
-use chrono::Utc;
-use diesel::{
-    r2d2::{ConnectionManager, Pool},
-    PgConnection,
-};
-use futures::future::LocalBoxFuture;
-use std::{
-    future::{ready, Ready},
-    rc::Rc,
-};
+use futures::future::{ready, LocalBoxFuture, Ready};
+use jsonwebtoken::{decode, DecodingKey, Validation};
+use serde::{Deserialize, Serialize};
+use std::rc::Rc;
 use uuid::Uuid;
 
-use crate::queries;
-
-/// Custom error type representing possible authentication errors in the middleware.
-///
-/// `AuthError` provides specific error types for various scenarios:
-/// - `InvalidToken`: Session token is missing or invalid.
-/// - `ExpiredSession`: Session has expired.
-/// - `SessionNotFound`: Session does not exist in the database.
-/// - `DatabaseError`: A general database error occurred.
-#[derive(Debug)]
-pub enum AuthError {
-    InvalidToken,
-    ExpiredSession,
-    SessionNotFound,
-    DbError(queries::DbError),
+lazy_static::lazy_static! {
+    static ref JWT_SECRET: Vec<u8> = {
+        std::env::var("JWT_SECRET")
+            .expect("JWT_SECRET must be set")
+            .into_bytes()
+    };
 }
 
-impl std::fmt::Display for AuthError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            AuthError::InvalidToken => write!(f, "Invalid session token"),
-            AuthError::ExpiredSession => write!(f, "Session has expired"),
-            AuthError::SessionNotFound => write!(f, "Session not found"),
-            AuthError::DbError(e) => write!(f, "Database error: {}", e),
-        }
-    }
+#[derive(Debug, Serialize, Deserialize)]
+pub struct Claims {
+    pub sub: Uuid,  // subject (user id)
+    pub exp: usize, // expiration time (as UTC timestamp)
+    pub iat: usize, // issued at (as UTC timestamp)
 }
 
-impl std::error::Error for AuthError {}
-
-impl From<AuthError> for Error {
-    fn from(err: AuthError) -> Error {
-        ErrorUnauthorized(err.to_string())
-    }
-}
-
-/// Middleware struct responsible for authenticating requests based on session tokens.
-///
-/// This middleware fetches the session token from cookies and verifies it against the database.
-/// If valid, it inserts the `user_id` into the request's extensions for further use by handlers.
-pub struct AuthMiddleware {
-    pool: Pool<ConnectionManager<PgConnection>>,
-}
-
-impl AuthMiddleware {
-    /// Creates a new instance of `AuthMiddleware` with a given database connection pool.
-    ///
-    /// # Arguments
-    ///
-    /// * `pool` - Database connection pool to fetch sessions for authentication.
-    pub fn new(pool: Pool<ConnectionManager<PgConnection>>) -> Self {
-        Self { pool }
-    }
-}
+pub struct AuthMiddleware;
 
 impl<S, B> Transform<S, ServiceRequest> for AuthMiddleware
 where
@@ -82,22 +39,15 @@ where
     type InitError = ();
     type Future = Ready<Result<Self::Transform, Self::InitError>>;
 
-    /// Creates the transformed `AuthMiddlewareService` to handle requests.
     fn new_transform(&self, service: S) -> Self::Future {
         ready(Ok(AuthMiddlewareService {
             service: Rc::new(service),
-            pool: self.pool.clone(),
         }))
     }
 }
 
-/// Service struct for processing each request, performing session validation and user ID injection.
-///
-/// This struct manages database access and error handling for each request as it flows
-/// through the middleware chain.
 pub struct AuthMiddlewareService<S> {
     service: Rc<S>,
-    pub pool: Pool<ConnectionManager<PgConnection>>,
 }
 
 impl<S, B> Service<ServiceRequest> for AuthMiddlewareService<S>
@@ -112,43 +62,45 @@ where
 
     forward_ready!(service);
 
-    /// Processes the incoming request, extracting and validating the session token.
-    ///
-    /// Retrieves the `session_token` from the request's cookies and queries the database to verify
-    /// the session. If valid and active, the associated `user_id` is inserted into the request's
-    /// extensions for use in downstream handlers.
     fn call(&self, req: ServiceRequest) -> Self::Future {
         let service = self.service.clone();
-        let pool = self.pool.clone();
 
         Box::pin(async move {
-            let token = req
-                .cookie("session_token")
-                .ok_or_else(|| AuthError::InvalidToken)?
-                .value()
-                .to_string();
+            // Extract bearer token from Authorization header
+            let auth_header = req
+                .headers()
+                .get(header::AUTHORIZATION)
+                .ok_or_else(|| ErrorUnauthorized("Missing authorization header"))?;
 
-            let session =
-                queries::get_active_session_by_token(&pool, &token, Utc::now().naive_utc())
-                    .map_err(AuthError::DbError)?
-                    .ok_or_else(|| AuthError::SessionNotFound)?;
+            let auth_str = auth_header
+                .to_str()
+                .map_err(|_| ErrorUnauthorized("Invalid authorization header"))?;
 
-            let uid = session
-                .user_id
-                .ok_or_else(|| ErrorUnauthorized("User ID missing in session"))?;
+            if !auth_str.starts_with("Bearer ") {
+                return Err(ErrorUnauthorized("Invalid authorization scheme"));
+            }
 
-            req.extensions_mut().insert(uid);
+            let token = &auth_str[7..]; // Skip "Bearer " prefix
+
+            // Validate JWT token
+            let token_data = decode::<Claims>(
+                token,
+                &DecodingKey::from_secret(&JWT_SECRET),
+                &Validation::default(),
+            )
+            .map_err(|_| ErrorUnauthorized("Invalid token"))?;
+
+            // Insert user_id into request extensions
+            req.extensions_mut().insert(token_data.claims.sub);
+
             service.call(req).await
         })
     }
 }
 
-/// Trait providing an extension for `ServiceRequest` and `HttpRequest` to access the authenticated user ID.
-///
-/// This trait allows for easy retrieval of the authenticated `user_id` (if present) from request
-/// extensions, making it accessible across handlers and middleware.
+/// Trait providing an extension for ServiceRequest and HttpRequest to access the authenticated user ID.
 pub trait AuthenticatedRequest {
-    /// Returns the authenticated `user_id`, if available.
+    /// Returns the authenticated user_id from the JWT claims.
     fn authenticated_user_id(&self) -> Option<Uuid>;
 }
 

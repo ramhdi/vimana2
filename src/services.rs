@@ -1,8 +1,6 @@
 use crate::{
-    models::{
-        NewSession, NewUser, NewVehicle, Odometer, RefuelWithOdometer, TraveledDistance, User,
-        Vehicle,
-    },
+    middleware::Claims,
+    models::{NewUser, NewVehicle, Odometer, RefuelWithOdometer, TraveledDistance, User, Vehicle},
     queries::{self, DbError},
     requests::LoginRequest,
     DbPool,
@@ -10,7 +8,6 @@ use crate::{
 use actix_web::http::StatusCode;
 use bcrypt::{hash, verify, DEFAULT_COST};
 use chrono::{Duration, NaiveDate, NaiveDateTime, Utc};
-use rand::{distributions::Alphanumeric, Rng};
 use std::fmt;
 use uuid::Uuid;
 
@@ -81,15 +78,16 @@ lazy_static::lazy_static! {
     static ref SUPERUSER_ID: Uuid = Uuid::parse_str(SUPERUSER_ID_STR).expect("Invalid superuser ID format");
 }
 
-/// Handles user login by validating credentials and creating a session.
-///
-/// # Arguments
-/// - `pool`: The database connection pool.
-/// - `req`: The login request containing username and password.
-///
-/// # Returns
-/// - `Ok(String)`: The session token upon successful login.
-/// - `Err(ServiceError)`: If login fails due to invalid credentials or other issues.
+lazy_static::lazy_static! {
+    static ref JWT_SECRET: Vec<u8> = {
+        std::env::var("JWT_SECRET")
+            .expect("JWT_SECRET must be set")
+            .into_bytes()
+    };
+}
+
+const JWT_EXPIRATION_HOURS: i64 = 24;
+
 pub async fn login(pool: &DbPool, req: &LoginRequest) -> Result<String, ServiceError> {
     let user = queries::get_user_by_username(pool, &req.username)?
         .ok_or_else(|| ServiceError::Unauthorized("Invalid username or password".to_string()))?;
@@ -97,49 +95,29 @@ pub async fn login(pool: &DbPool, req: &LoginRequest) -> Result<String, ServiceE
     let is_valid = verify(&req.password, &user.hashed_password)
         .map_err(|_| ServiceError::Other("Password verification error".to_string()))?;
 
-    if is_valid {
-        let session_token: String = rand::thread_rng()
-            .sample_iter(&Alphanumeric)
-            .take(30)
-            .map(char::from)
-            .collect();
-
-        let expires_at = Utc::now() + Duration::days(1);
-
-        queries::create_new_session(
-            pool,
-            &NewSession {
-                id: Uuid::new_v4(),
-                user_id: Some(user.id),
-                session_token: session_token.clone(),
-                expires_at: expires_at.naive_utc(),
-                created_at: Some(Utc::now().naive_utc()),
-            },
-        )?;
-
-        Ok(session_token)
-    } else {
-        Err(ServiceError::Unauthorized(
+    if !is_valid {
+        return Err(ServiceError::Unauthorized(
             "Invalid username or password".to_string(),
-        ))
+        ));
     }
-}
 
-/// Handles user logout by deleting a specific session.
-///
-/// # Arguments
-/// - `pool`: The database connection pool.
-/// - `user_id`: The ID of the user logging out.
-/// - `token`: The session token to delete.
-///
-/// # Returns
-/// - `Ok(())`: If the session was successfully deleted.
-/// - `Err(ServiceError)`: If the session is not found or another error occurs.
-pub async fn logout(pool: &DbPool, user_id: Uuid, token: &str) -> Result<(), ServiceError> {
-    match queries::delete_session(pool, user_id, token)? {
-        0 => Err(ServiceError::NotFound("Session not found".to_string())),
-        _ => Ok(()),
-    }
+    // Generate JWT token
+    let now = Utc::now();
+    let exp = (now + Duration::hours(JWT_EXPIRATION_HOURS)).timestamp() as usize;
+    let claims = Claims {
+        sub: user.id,
+        exp,
+        iat: now.timestamp() as usize,
+    };
+
+    let token = jsonwebtoken::encode(
+        &jsonwebtoken::Header::default(),
+        &claims,
+        &jsonwebtoken::EncodingKey::from_secret(&JWT_SECRET),
+    )
+    .map_err(|_| ServiceError::Other("Token generation failed".to_string()))?;
+
+    Ok(token)
 }
 
 /// Handles the creation of a new user, restricted to superusers.

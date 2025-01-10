@@ -83,21 +83,16 @@ async fn main() -> std::io::Result<()> {
             .route("/", web::get().to(renders::render_login))
             .route(
                 "/home",
-                web::get()
-                    .to(renders::render_home)
-                    .wrap(AuthMiddleware::new(pool.clone())),
+                web::get().to(renders::render_home).wrap(AuthMiddleware),
+                // .wrap(AuthMiddleware::new(pool.clone())),
             )
             .route(
                 "/refuel",
-                web::get()
-                    .to(renders::render_refuel)
-                    .wrap(AuthMiddleware::new(pool.clone())),
+                web::get().to(renders::render_refuel).wrap(AuthMiddleware),
             )
             .route(
                 "/vehicles/{vehicle_id}",
-                web::get()
-                    .to(renders::render_vehicle)
-                    .wrap(AuthMiddleware::new(pool.clone())),
+                web::get().to(renders::render_vehicle).wrap(AuthMiddleware),
             )
             .service(
                 web::scope("/api")
@@ -108,9 +103,8 @@ async fn main() -> std::io::Result<()> {
                     )
                     .service(
                         web::scope("/protected")
-                            .wrap(AuthMiddleware::new(pool.clone()))
+                            .wrap(AuthMiddleware)
                             .route("/health", web::get().to(handlers::health_check))
-                            .route("/logout", web::post().to(handlers::logout))
                             .route("/users", web::post().to(handlers::create_user))
                             .service(
                                 web::scope("/vehicles")
@@ -165,7 +159,7 @@ async fn main() -> std::io::Result<()> {
         // .service(fs::Files::new("/static", "./static").show_files_listing())
         // .service(fs::Files::new("/", "./frontend/build/client").index_file("index.html"))
     })
-    .bind(("0.0.0.0", 8081))?
+    .bind(("0.0.0.0", 8018))?
     .run()
     .await
 }
